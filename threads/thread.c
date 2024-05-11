@@ -63,6 +63,10 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
+
+static struct list sleep_list;
+static int64_t global_ticks;
+
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -78,6 +82,11 @@ static tid_t allocate_tid (void);
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
+
+void thread_sleep(int64_t ticks);
+void thread_wakeup(int64_t ticks);
+void update_global_ticks(int64_t ticks);
+int64_t sort_by_min_tick(struct list_elem *e,struct list_elem *min, int64_t global_ticks );
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -99,22 +108,27 @@ thread_init (void) {
 	/* Reload the temporal gdt for the kernel
 	 * This gdt does not include the user context.
 	 * The kernel will rebuild the gdt with user context, in gdt_init (). */
+	// 글로벌 디스크립터 테이블 (세그리먼트 기반의 메모리 관리에서 중요한 역할)
 	struct desc_ptr gdt_ds = {
 		.size = sizeof (gdt) - 1,
 		.address = (uint64_t) gdt
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
-	lock_init (&tid_lock);
+	/* 전역 컨테스트 초기화 */
+	lock_init (&tid_lock); // 스레드 ID를 할당할 때 동시성 문제를 방지하기 위한 락
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	list_init (&sleep_list);
+
+	global_ticks = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
-	init_thread (initial_thread, "main", PRI_DEFAULT);
+	init_thread (initial_thread, "main", PRI_DEFAULT); // 우선순위를 기본값으로 설정
 	initial_thread->status = THREAD_RUNNING;
-	initial_thread->tid = allocate_tid ();
+	initial_thread->tid = allocate_tid (); // 고유 tid를 할당
+	initial_thread->wakeup_tick = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -122,8 +136,8 @@ thread_init (void) {
 void
 thread_start (void) {
 	/* Create the idle thread. */
-	struct semaphore idle_started;
-	sema_init (&idle_started, 0);
+	struct semaphore idle_started; // 세마포어 구조체 선언
+	sema_init (&idle_started, 0); // 세마포어를 초기화
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
 	/* Start preemptive thread scheduling. */
@@ -140,7 +154,7 @@ thread_tick (void) {
 	struct thread *t = thread_current ();
 
 	/* Update statistics. */
-	if (t == idle_thread)
+	if (t == idle_thread) 
 		idle_ticks++;
 #ifdef USERPROG
 	else if (t->pml4 != NULL)
@@ -150,7 +164,7 @@ thread_tick (void) {
 		kernel_ticks++;
 
 	/* Enforce preemption. */
-	if (++thread_ticks >= TIME_SLICE)
+	if (++thread_ticks >= TIME_SLICE) //선점형 스케쥴링 구현
 		intr_yield_on_return ();
 }
 
@@ -182,10 +196,10 @@ thread_create (const char *name, int priority,
 	struct thread *t;
 	tid_t tid;
 
-	ASSERT (function != NULL);
+	ASSERT (function != NULL); // 함수 포인터가 유효한지
 
 	/* Allocate thread. */
-	t = palloc_get_page (PAL_ZERO);
+	t = palloc_get_page (PAL_ZERO); // 페이지 할당자를 통해 메모리를 할당하고 할당된 메모리를 0으로
 	if (t == NULL)
 		return TID_ERROR;
 
@@ -195,6 +209,7 @@ thread_create (const char *name, int priority,
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
+	/* 쓰레드의 컨텍스트(상태)를 설정*/
 	t->tf.rip = (uintptr_t) kernel_thread;
 	t->tf.R.rdi = (uint64_t) function;
 	t->tf.R.rsi = (uint64_t) aux;
@@ -205,7 +220,7 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	/* Add to run queue. */
-	thread_unblock (t);
+	thread_unblock (t); // 쓰레드를 실행 가능 상태로 => 레디 큐에 추가
 
 	return tid;
 }
@@ -216,22 +231,22 @@ thread_create (const char *name, int priority,
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
+/* 쓰레드를 차단 상태로 만나고 스케쥴러를 호출해서 다음 쓰레드로 전환하는 작업*/
 void
 thread_block (void) {
 	ASSERT (!intr_context ());
 	ASSERT (intr_get_level () == INTR_OFF);
-	thread_current ()->status = THREAD_BLOCKED;
-	schedule ();
+	thread_current ()->status = THREAD_BLOCKED; 
+	schedule (); // 스케쥴러를 호출하여 새로운 쓰레드를 선택하고 실행 -> 다음 쓰레드를 선택하기 위해 스케쥴러 호출
 }
 
-/* Transitions a blocked thread T to the ready-to-run state.
-   This is an error if T is not blocked.  (Use thread_yield() to
-   make the running thread ready.)
+/* 차단된 스레드 T를 준비-실행 상태로 전환합니다.
+   T가 차단되지 않은 상태라면 이는 오류입니다. (실행 중인 스레드를 준비 상태로 만들기 위해서는 thread_yield()를 사용하세요.)
 
-   This function does not preempt the running thread.  This can
-   be important: if the caller had disabled interrupts itself,
-   it may expect that it can atomically unblock a thread and
-   update other data. */
+   이 함수는 실행 중인 스레드를 선점하지 않습니다. 이는 중요할 수 있습니다: 호출자가 인터럽트를 직접 비활성화한 경우,
+   스레드를 원자적으로 차단 해제하고 다른 데이터를 업데이트할 수 있기를 기대할 수 있습니다. */
+ 
+ /* 차단 상태의 쓰레드를 준비 상태로 변경하고 준비 리스트에 추가*/
 void
 thread_unblock (struct thread *t) {
 	enum intr_level old_level;
@@ -242,7 +257,7 @@ thread_unblock (struct thread *t) {
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
-	intr_set_level (old_level);
+	intr_set_level (old_level); // 인터럽트 레벨 복원
 }
 
 /* Returns the name of the running thread. */
@@ -399,13 +414,13 @@ kernel_thread (thread_func *function, void *aux) {
    NAME. */
 static void
 init_thread (struct thread *t, const char *name, int priority) {
-	ASSERT (t != NULL);
-	ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
-	ASSERT (name != NULL);
+	ASSERT (t != NULL); // 쓰레드 포인터가 유효
+	ASSERT (PRI_MIN <= priority && priority <= PRI_MAX); // 우선순위가 유효한 범위 내인지
+	ASSERT (name != NULL); // 쓰레드 이름이 유효
 
-	memset (t, 0, sizeof *t);
-	t->status = THREAD_BLOCKED;
-	strlcpy (t->name, name, sizeof t->name);
+	memset (t, 0, sizeof *t); // 쓰레드 구조체 기본값 설정 
+	t->status = THREAD_BLOCKED; // 실행준비 X
+	strlcpy (t->name, name, sizeof t->name); 
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
@@ -462,6 +477,7 @@ do_iret (struct intr_frame *tf) {
    It's not safe to call printf() until the thread switch is
    complete.  In practice that means that printf()s should be
    added at the end of the function. */
+   /* 쓰레드간 문맥 전환 */
 static void
 thread_launch (struct thread *th) {
 	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
@@ -525,6 +541,7 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
+/* 스케쥴링 루틴을 수행 현재 실행중인 스레드 상태 변경, 스케쥴러를 호출해서 다음에 실행한 스레드를 선택 후 실행*/
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
@@ -538,6 +555,7 @@ do_schedule(int status) {
 	schedule ();
 }
 
+/* 스케쥴러가 다음에 실행한 스레드를 선택하고, 필요한 경우 스레드 컨텍스트 전환*/
 static void
 schedule (void) {
 	struct thread *curr = running_thread ();
@@ -565,6 +583,7 @@ schedule (void) {
 		   currently used by the stack.
 		   The real destruction logic will be called at the beginning of the
 		   schedule(). */
+		   /* 현재 스레드가 종료 상태고 초기 스레드가 아닌경우 현재 쓰레드를 destruction_req에 추가 */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
 			list_push_back (&destruction_req, &curr->elem);
@@ -573,7 +592,7 @@ schedule (void) {
 		/* Before switching the thread, we first save the information
 		 * of current running. */
 		thread_launch (next);
-	}
+	} 
 }
 
 /* Returns a tid to use for a new thread. */
@@ -587,4 +606,70 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+void update_global_ticks(int64_t ticks)
+{
+	global_ticks = global_ticks > ticks ? global_ticks : ticks;
+}
+
+
+void thread_sleep(int64_t ticks)
+{
+    struct thread *cur = thread_current();
+    enum intr_level old_level = intr_disable();
+
+	ASSERT (!intr_context ());
+    ASSERT(cur != idle_thread);
+
+    cur->wakeup_tick = ticks;
+    list_push_back(&sleep_list, &cur->elem);
+
+	// block + schedule();
+    thread_block(); 
+	update_global_ticks();
+
+    intr_set_level(old_level);
+}
+
+
+// int64_t sort_by_min_tick (struct list_elem *e,struct list_elem *min, int64_t global_tick )
+// {
+// 	int64_t a = list_entry(e, struct thread, elem)->wakeup_tick;
+// 	int64_t b = list_entry(min, struct thread, elem)->wakeup_tick;
+
+// 	return a < b;
+// }
+
+bool sort_by_min_tick(const struct list_elem *a, const struct list_elem *b, void *aux) {
+    struct thread *thread_a = list_entry(a, struct thread, elem);
+    struct thread *thread_b = list_entry(b, struct thread, elem);
+    return thread_a->wakeup_tick < thread_b->wakeup_tick;
+}
+
+
+void thread_awake(int64_t ticks)
+{
+    enum intr_level old_level;
+    struct thread *min_tick_in_sleep_thread = NULL; 
+
+    old_level = intr_disable();
+
+    while (!list_empty(&sleep_list))
+    {
+        struct list_elem *e = list_front(&sleep_list);
+        struct thread *t = list_entry(e, struct thread, elem);
+
+        if (t->wakeup_tick <= ticks)
+        {
+            list_pop_front(&sleep_list);
+            thread_unblock(t);
+        }
+        else
+        {
+            break; 
+        }
+    }
+
+    intr_set_level(old_level);
 }
