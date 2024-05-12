@@ -1,5 +1,6 @@
 #include "threads/thread.h"
 #include <debug.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
@@ -84,9 +85,9 @@ static int64_t global_ticks;
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
 void thread_sleep(int64_t ticks);
-void thread_wakeup(int64_t ticks);
-void update_global_ticks(int64_t ticks);
-int64_t sort_by_min_tick(struct list_elem *e,struct list_elem *min, int64_t global_ticks );
+void thread_awake(int64_t ticks);
+void update_global_ticks();
+bool sort_by_min_tick(struct list_elem *e,struct list_elem *min, int64_t global_ticks );
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -232,6 +233,9 @@ thread_create (const char *name, int priority,
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
 /* 쓰레드를 차단 상태로 만나고 스케쥴러를 호출해서 다음 쓰레드로 전환하는 작업*/
+
+// 1.sleep으로 변경
+// 2.다음 실행할 thread 선정
 void
 thread_block (void) {
 	ASSERT (!intr_context ());
@@ -247,6 +251,10 @@ thread_block (void) {
    스레드를 원자적으로 차단 해제하고 다른 데이터를 업데이트할 수 있기를 기대할 수 있습니다. */
  
  /* 차단 상태의 쓰레드를 준비 상태로 변경하고 준비 리스트에 추가*/
+
+ // block -> read로 전달한 thread 상태 변경
+ // ready list에 넣는다.
+ // 단 block list에서 제거하지 않는다.
 void
 thread_unblock (struct thread *t) {
 	enum intr_level old_level;
@@ -608,67 +616,83 @@ allocate_tid (void) {
 	return tid;
 }
 
-void update_global_ticks(int64_t ticks)
+void update_global_ticks()
 {
-	global_ticks = global_ticks > ticks ? global_ticks : ticks;
+	struct list_elem *min_tick_e = list_begin(&sleep_list);
+	struct thread *min_tick_thread = list_entry(min_tick_e, struct thread, elem);
+
+	global_ticks = min_tick_thread->wakeup_tick;
 }
 
-
+/*
+1. 현 스레드를 sleep으로 변경
+2. global tick 변경
+3. 다음 실행할 스레드 선정
+*/
 void thread_sleep(int64_t ticks)
 {
     struct thread *cur = thread_current();
-    enum intr_level old_level = intr_disable();
 
 	ASSERT (!intr_context ());
     ASSERT(cur != idle_thread);
 
-    cur->wakeup_tick = ticks;
-    list_push_back(&sleep_list, &cur->elem);
+	if (cur == idle_thread) {
+		return ;
+	}
 
-	// block + schedule();
-    thread_block(); 
+	enum intr_level old_level = intr_disable();
+
+	cur->wakeup_tick = ticks;
+	list_insert_ordered(&sleep_list, &curr->elem, sort_by_min_tick, &curr->wakeup_tick);
+
 	update_global_ticks();
-
-    intr_set_level(old_level);
+	// 1. sleep으로 변경
+	// 2. 다음 실행할 thread 선정(schedule)
+	thread_block();
+	intr_set_level(old_level);
 }
 
 
-// int64_t sort_by_min_tick (struct list_elem *e,struct list_elem *min, int64_t global_tick )
-// {
-// 	int64_t a = list_entry(e, struct thread, elem)->wakeup_tick;
-// 	int64_t b = list_entry(min, struct thread, elem)->wakeup_tick;
+bool sort_by_min_tick (struct list_elem *e,struct list_elem *min, int64_t global_tick )
+{
+	int64_t a = list_entry(e, struct thread, elem)->wakeup_tick;
+	int64_t b = list_entry(min, struct thread, elem)->wakeup_tick;
 
-// 	return a < b;
-// }
-
-bool sort_by_min_tick(const struct list_elem *a, const struct list_elem *b, void *aux) {
-    struct thread *thread_a = list_entry(a, struct thread, elem);
-    struct thread *thread_b = list_entry(b, struct thread, elem);
-    return thread_a->wakeup_tick < thread_b->wakeup_tick;
+	return a < b;
 }
 
-
+// 1. sleep list에서 tick만족한 것들은 깨운다.
+// 1-1. sleep list에서 제거
+// 1-2 ready 상태로 변경
+// 1-3 ready list에 삽입
 void thread_awake(int64_t ticks)
 {
-    enum intr_level old_level;
-    struct thread *min_tick_in_sleep_thread = NULL; 
+	// 최소 tick이 현 tick보다 크다.
+	// 즉 wake할 스레드가 존재하지 않는다.
+	if (global_ticks>ticks) {
+		return;
+	}
+
+	enum intr_level old_level;
 
     old_level = intr_disable();
 
     while (!list_empty(&sleep_list))
     {
-        struct list_elem *e = list_front(&sleep_list);
+        struct list_elem *e = list_begin(&sleep_list);
         struct thread *t = list_entry(e, struct thread, elem);
 
-        if (t->wakeup_tick <= ticks)
-        {
-            list_pop_front(&sleep_list);
-            thread_unblock(t);
-        }
-        else
-        {
-            break; 
-        }
+		if (t->wakeup_tick > ticks) {
+			break;
+		}
+
+		// sleep_list에서 제거한다
+		struct list_elem *wakeup_target_e = poplist_pop_front(&sleep_list);
+		struct thread *wakeup_target_thread = list_entry(wakeup_target_e, struct thread, elem);
+		// 1. block -> ready로 전달한 thread 상태 변경
+ 		// 2. ready list에 넣는다.
+		thread_unblock(wakeup_target_thread);
+		update_global_ticks();
     }
 
     intr_set_level(old_level);
