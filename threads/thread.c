@@ -643,7 +643,7 @@ void thread_sleep(int64_t ticks)
 	enum intr_level old_level = intr_disable();
 
 	cur->wakeup_tick = ticks;
-	list_insert_ordered(&sleep_list, &curr->elem, sort_by_min_tick, &curr->wakeup_tick);
+	list_insert_ordered(&sleep_list, &cur->elem, sort_by_min_tick, &cur->wakeup_tick);
 
 	update_global_ticks();
 	// 1. sleep으로 변경
@@ -687,7 +687,7 @@ void thread_awake(int64_t ticks)
 		}
 
 		// sleep_list에서 제거한다
-		struct list_elem *wakeup_target_e = poplist_pop_front(&sleep_list);
+		struct list_elem *wakeup_target_e = list_pop_front(&sleep_list);
 		struct thread *wakeup_target_thread = list_entry(wakeup_target_e, struct thread, elem);
 		// 1. block -> ready로 전달한 thread 상태 변경
  		// 2. ready list에 넣는다.
