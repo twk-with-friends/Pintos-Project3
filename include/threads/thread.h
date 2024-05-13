@@ -90,11 +90,19 @@ struct thread {
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
-	int priority; 
+
+	// Alarm clock
 	int64_t wakeup_tick;                      /* Priority. */
+
+	// Priority Scheduling
+	int priority;
+	struct lock *wait_on_lock;
+	struct list *donation;
+	struct list_elem d_elem;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -147,6 +155,6 @@ void do_iret (struct intr_frame *tf);
 void thread_sleep(int64_t ticks);
 void thread_awake(int64_t ticks);
 
-void cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux);
+bool cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux);
 
 #endif /* threads/thread.h */

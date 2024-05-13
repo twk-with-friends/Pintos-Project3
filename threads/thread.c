@@ -214,7 +214,7 @@ thread_create (const char *name, int priority,
 	t->tf.rip = (uintptr_t) kernel_thread;
 	t->tf.R.rdi = (uint64_t) function;
 	t->tf.R.rsi = (uint64_t) aux;
-	t->tf.ds = SEL_KDSEG;
+	t->tf.ds = SEL_KDSEG; 
 	t->tf.es = SEL_KDSEG;
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
@@ -334,7 +334,7 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread)
 		list_insert_ordered(&ready_list, & curr-> elem, cmp_priority, NULL);
-	do_schedule (THREAD_READY);
+	do_schedule (THREAD_READY);                          
 	intr_set_level (old_level);
 }
 
@@ -446,6 +446,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name); 
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+	t->wait_on_lock = NULL;
+	list_init(&t->donation);
 	t->magic = THREAD_MAGIC;
 }
 
@@ -713,9 +715,9 @@ void thread_awake(int64_t ticks)
     intr_set_level(old_level);
 }
 
-void cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux){
-	int64_t cur_priority = list_entry(cur, struct thread, elem)->priority;
-	int64_t cmp_priority = list_entry(cmp, struct thread, elem)->priority;
+bool cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux){
+	int cur_priority = list_entry(cur, struct thread, elem)->priority;
+	int cmp_priority = list_entry(cmp, struct thread, elem)->priority;
 
 	return cur_priority > cmp_priority;
 }
