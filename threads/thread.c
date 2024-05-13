@@ -643,7 +643,7 @@ void thread_sleep(int64_t ticks)
 	enum intr_level old_level = intr_disable();
 
 	cur->wakeup_tick = ticks;
-	list_insert_ordered(&sleep_list, &cur->elem, sort_by_min_tick, &cur->wakeup_tick);
+	list_insert_ordered(&sleep_list, &cur->elem, sort_by_min_tick, NULL);
 
 	update_global_ticks();
 	// 1. sleep으로 변경
@@ -653,7 +653,7 @@ void thread_sleep(int64_t ticks)
 }
 
 
-bool sort_by_min_tick (struct list_elem *e,struct list_elem *min, int64_t global_tick )
+bool sort_by_min_tick (struct list_elem *e,struct list_elem *min, void *aux)
 {
 	int64_t a = list_entry(e, struct thread, elem)->wakeup_tick;
 	int64_t b = list_entry(min, struct thread, elem)->wakeup_tick;
