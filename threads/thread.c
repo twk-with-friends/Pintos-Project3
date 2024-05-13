@@ -87,7 +87,7 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 void thread_sleep(int64_t ticks);
 void thread_awake(int64_t ticks);
 void update_global_ticks();
-bool sort_by_min_tick(struct list_elem *e,struct list_elem *min, int64_t global_ticks );
+bool sort_by_min_tick(struct list_elem *e,struct list_elem *min, void *aux );
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -220,9 +220,14 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	/* Add to run queue. */
-	thread_unblock (t); // 쓰레드를 실행 가능 상태로 => 레디 큐에 추가
+	thread_unblock (t);
 
+	struct thread *cur = running_thread();
+	if (cur->priority < priority)
+	{
+		thread_yield();
+	}
+	
 	return tid;
 }
 
@@ -263,8 +268,11 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	// list_push_back (&ready_list, &t->elem);
+	// 우선순위 기반으로 정렬한다
+	list_insert_ordered(&ready_list, &t-> elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
+
 	intr_set_level (old_level); // 인터럽트 레벨 복원
 }
 
@@ -321,12 +329,11 @@ void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
-
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, & curr-> elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -335,10 +342,18 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	// list_max (struct list *list, list_less_func *less, void *aux)
+	struct list_elem * max_priority = list_max (&ready_list, cmp_priority,NULL);
+	int priority = list_entry (max_priority, struct thread, elem) -> priority;
+	
+	// ready list에 더 높은 우선순위가 있다
+	if (new_priority < priority){
+		thread_yield();
+	}
 }
 
 /* Returns the current thread's priority. */
-int
+int 
 thread_get_priority (void) {
 	return thread_current ()->priority;
 }
@@ -696,4 +711,11 @@ void thread_awake(int64_t ticks)
     }
 
     intr_set_level(old_level);
+}
+
+void cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux){
+	int64_t cur_priority = list_entry(cur, struct thread, elem)->priority;
+	int64_t cmp_priority = list_entry(cmp, struct thread, elem)->priority;
+
+	return cur_priority > cmp_priority;
 }

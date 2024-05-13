@@ -147,4 +147,6 @@ void do_iret (struct intr_frame *tf);
 void thread_sleep(int64_t ticks);
 void thread_awake(int64_t ticks);
 
+void cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux);
+
 #endif /* threads/thread.h */
