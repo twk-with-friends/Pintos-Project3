@@ -731,15 +731,19 @@ bool cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux){
 
 void 
 max_priority(void){
+	if (list_empty(&ready_list))
+	{
+		return;
+	}
+	
 	int curr_priority = thread_current()->priority;
 	list_sort(&ready_list, cmp_priority, NULL);
-	struct list_elem *max_priority_e = list_pop_front(&ready_list);
-	int max_priority = list_entry(max_priority_e, struct thread, elem)->priority;
+	struct list_elem *e= list_begin(&ready_list);
+	struct thread *t = list_entry(e, struct thread, elem);
 	// struct list_elem * max_priority = list_max (&ready_list, cmp_priority, NULL);
 	// int priority = list_entry (max_priority, struct thread, elem) -> priority;
 	
-	// ready list에 더 높은 우선순위가 있다
-	if (curr_priority < max_priority){
+	if (curr_priority < t->priority){
 		thread_yield();
 	}
 }
