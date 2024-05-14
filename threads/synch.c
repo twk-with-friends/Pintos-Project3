@@ -387,31 +387,27 @@ list_remove (struct list_elem *elem) {
 	return elem->next;
 }
 */
-// void
-// close_lock(struct lock *lock){
-// 	struct thread *curr = thread_current();
-// 	struct list *curr_donation = curr -> donation;
-// 	e = list_begin (curr_donation);
-// 	// for (e = list_begin (curr_donation); e != list_end (curr_donation);){
-// 	// 	struct thread *t = list_entry(e, struct thread, elem);
-
-// 	// 	if (t->wait_on_lock == lock)
-// 	// 	{
-// 	// 		e = list_remove(e);
-// 	// 	}
-// 	// 	else
-// 	// 	{
-// 	// 		e = list_next(e);
-// 	// 	}	
-// 	// }
-// 	while(list_next(e) == NULL){
-
-// 	}
-
-// }
+void close_lock (struct lock *lock)
+{
+	struct thread *t = thread_current();
+	struct list_elem *e = list_begin(&t->donation);
+ 
+	for (e ; e != list_end((&t->donation));)
+	{
+		struct thread *cur = list_entry(e, struct thread, d_elem);
+		if (cur->wait_on_lock == lock)
+		{
+			e = list_remove(e);
+		}
+		else
+		{
+			e = list_next(e);
+		}
+	}
+}
 
 void 
-preemption(void){
+preempt(void){
 	struct thread *curr_thread = thread_current();
 	max_priority();	
 	// list_sort(&ready_list, cmp_priority, NULL);
@@ -425,9 +421,11 @@ preemption(void){
 
 void return_priority(void){
 	struct thread *curr_thread = thread_current();
-
 	curr_thread -> priority = curr_thread -> init_priority;
+
+	if (list_empty(&curr_thread->donation) == false){
 	max_priority();
+	}
 }
 	
 
