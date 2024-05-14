@@ -96,6 +96,7 @@ struct thread {
 
 	// Priority Scheduling
 	int priority;
+	int init_priority;
 	struct lock *wait_on_lock;
 	struct list *donation;
 	struct list_elem d_elem;
@@ -156,5 +157,5 @@ void thread_sleep(int64_t ticks);
 void thread_awake(int64_t ticks);
 
 bool cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux);
-
+void max_priority(void);
 #endif /* threads/thread.h */

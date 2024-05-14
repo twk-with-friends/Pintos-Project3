@@ -342,14 +342,9 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
-	// list_max (struct list *list, list_less_func *less, void *aux)
-	struct list_elem * max_priority = list_max (&ready_list, cmp_priority,NULL);
-	int priority = list_entry (max_priority, struct thread, elem) -> priority;
-	
-	// ready list에 더 높은 우선순위가 있다
-	if (new_priority < priority){
-		thread_yield();
-	}
+
+	return_priority();
+	max_priority();
 }
 
 /* Returns the current thread's priority. */
@@ -445,8 +440,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->status = THREAD_BLOCKED; // 실행준비 X
 	strlcpy (t->name, name, sizeof t->name); 
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
-	t->priority = priority;
 	t->wait_on_lock = NULL;
+	t->priority = priority;
+	t->init_priority = priority;
 	list_init(&t->donation);
 	t->magic = THREAD_MAGIC;
 }
@@ -720,4 +716,30 @@ bool cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux){
 	int cmp_priority = list_entry(cmp, struct thread, elem)->priority;
 
 	return cur_priority > cmp_priority;
+}
+
+/**
+ * 	thread_unblock (t);
+
+	struct thread *cur = running_thread();
+	if (cur->priority < priority)
+	{
+		thread_yield();
+	}
+ * 
+*/
+
+void 
+max_priority(void){
+	int curr_priority = thread_current()->priority;
+	list_sort(&ready_list, cmp_priority, NULL);
+	struct list_elem *max_priority_e = list_pop_front(&ready_list);
+	int max_priority = list_entry(max_priority_e, struct thread, elem)->priority;
+	// struct list_elem * max_priority = list_max (&ready_list, cmp_priority, NULL);
+	// int priority = list_entry (max_priority, struct thread, elem) -> priority;
+	
+	// ready list에 더 높은 우선순위가 있다
+	if (curr_priority < max_priority){
+		thread_yield();
+	}
 }

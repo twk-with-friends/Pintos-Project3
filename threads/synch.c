@@ -123,6 +123,7 @@ sema_up (struct semaphore *sema) {
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
 	}
+
 	sema->value++;
 	intr_set_level (old_level);
 }
@@ -199,7 +200,20 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	struct thread *curr = thread_current();
+	// 이미 lock의 holder가 존재한다면
+	if (lock->holder)
+	{	
+		// 현 스레드가 기다리는 lock의 정보 업데이트
+		curr->wait_on_lock = lock;
+		// donation 받은 thread의 구조체를 list로 관리
+		list_push_back (&lock->holder->donation,&curr->d_elem);
+		donate_priority();
+	}
+
 	sema_down (&lock->semaphore);
+	thread_current()->wait_on_lock = NULL;
+	//lock을 획득 한 후 lock holder를 갱신
 	lock->holder = thread_current ();
 }
 
@@ -337,3 +351,67 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
 }
+
+
+void 
+donate_priority (void)
+{
+    int depth;
+    struct thread *cur = thread_current();
+
+
+    for (depth = 0; depth < 8; depth++) { 
+        if (!cur->wait_on_lock) 
+		 	break;
+        struct thread *holder = cur->wait_on_lock->holder;                                
+        holder->priority = cur->priority;
+        cur = holder; 
+    }
+}
+
+void
+close_lock(struct lock *lock){
+	struct thread *curr = thread_current();
+	struct list *curr_donation = curr -> donation;
+	struct list_elem *e = list_begin(&curr_donation);
+
+	for (e = list_begin (curr_donation); e != list_end (curr_donation);){
+		struct thread *t = list_entry(e, struct thread, elem);
+
+		if (t->wait_on_lock == lock)
+		{
+			e = list_remove(e);
+		}
+		else
+		{
+			e = list_next(e);
+		}	
+	}
+}
+
+void 
+preemption(void){
+	struct thread *curr_thread = thread_current();
+	max_priority();
+	
+	// list_sort(&ready_list, cmp_priority, NULL);
+	// struct list_elem *next_running_thread_e = list_pop_front(&ready_list);
+	// struct thread *next_running_thread = list_entry(next_running_thread_e, struct thread, elem);
+
+	// if (curr_thread -> priority < next_running_thread -> priority)
+	// {
+	// 	thread_yield();
+}
+
+// 스레드의 우선순위 변경 시 donation을 고려하여 우선순위를 다시 결정한다
+void return_priority(void){
+	//  초기 우선순위로 변경
+	struct thread *curr_thread = thread_current();
+
+	curr_thread -> priority = curr_thread -> init_priority;
+	max_priority();
+}
+	
+
+
+
