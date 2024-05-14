@@ -371,22 +371,6 @@ donate_priority (void){
 
 //lock을 해지 했을 때 donation 리스트에서 해당 엔트리를 삭제하기 위한 함수를 구현
 // 현재 쓰레드의 donation 리스트를 확인하여 해지 할 lock을 보유하고 있는 엔트리를 삭제
-/*
-
-struct list_elem *
-list_next (struct list_elem *elem) {
-	ASSERT (is_head (elem) || is_interior (elem));
-	return elem->next;
-}
-
-struct list_elem *
-list_remove (struct list_elem *elem) {
-	ASSERT (is_interior (elem));
-	elem->prev->next = elem->next;
-	elem->next->prev = elem->prev;
-	return elem->next;
-}
-*/
 void close_lock (struct lock *lock)
 {
 	struct thread *t = thread_current();
@@ -406,25 +390,32 @@ void close_lock (struct lock *lock)
 	}
 }
 
+// void 
+// preempt(void){
+// 	struct thread *curr_thread = thread_current();
+// 	max_priority();	
+// 	// list_sort(&ready_list, cmp_priority, NULL);
+// 	// struct list_elem *next_running_thread_e = list_pop_front(&ready_list);
+// 	// struct thread *next_running_thread = list_entry(next_running_thread_e, struct thread, elem);
+
+// 	// if (curr_thread -> priority < next_running_thread -> priority)
+// 	// {
+// 	// 	thread_yield();
+// }
+
 void 
-preempt(void){
-	struct thread *curr_thread = thread_current();
-	max_priority();	
-	// list_sort(&ready_list, cmp_priority, NULL);
-	// struct list_elem *next_running_thread_e = list_pop_front(&ready_list);
-	// struct thread *next_running_thread = list_entry(next_running_thread_e, struct thread, elem);
-
-	// if (curr_thread -> priority < next_running_thread -> priority)
-	// {
-	// 	thread_yield();
-}
-
-void return_priority(void){
+return_priority(void){
 	struct thread *curr_thread = thread_current();
 	curr_thread -> priority = curr_thread -> init_priority;
 
 	if (list_empty(&curr_thread->donation) == false){
-	max_priority();
+		list_sort(&curr_thread->donation, &cmp_priority, NULL);
+
+		struct thread *max_thread = list_entry(list_front(&curr_thread->donation), struct thread, d_elem);
+
+		if (max_thread->priority > curr_thread->priority){
+			curr_thread->priority = max_thread->priority;
+		}
 	}
 }
 	
