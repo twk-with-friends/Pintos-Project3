@@ -740,8 +740,6 @@ max_priority(void){
 	list_sort(&ready_list, cmp_priority, NULL);
 	struct list_elem *e= list_begin(&ready_list);
 	struct thread *t = list_entry(e, struct thread, elem);
-	// struct list_elem * max_priority = list_max (&ready_list, cmp_priority, NULL);
-	// int priority = list_entry (max_priority, struct thread, elem) -> priority;
 	
 	if (curr_priority < t->priority){
 		thread_yield();

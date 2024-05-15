@@ -39,6 +39,7 @@ void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
 void donate_priority (void);
 void return_priority(void);
+void close_lock (struct lock *lock);
 
 /* Optimization barrier.
  *
