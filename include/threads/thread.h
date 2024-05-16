@@ -98,7 +98,7 @@ struct thread {
 	int priority;
 	int init_priority;
 	struct lock *wait_on_lock;
-	struct list *donation;
+	struct list donation;
 	struct list_elem d_elem;
 
 	/* Shared between thread.c and synch.c. */
