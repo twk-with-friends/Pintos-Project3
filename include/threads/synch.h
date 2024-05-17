@@ -42,7 +42,12 @@ void return_priority(void);
 void close_lock (struct lock *lock);
 
 bool cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+<<<<<<< HEAD
 bool cmp_donation_priority(struct list_elem *cur,struct list_elem *cmp, void *aux);
+=======
+bool com_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+>>>>>>> d2bc13b6c0ed3e2d808bdc8a3a8a810bcb8d4447
 /* Optimization barrier.
  *
  * The compiler will not reorder operations across an

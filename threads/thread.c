@@ -532,7 +532,7 @@ thread_launch (struct thread *th) {
 	ASSERT (intr_get_level () == INTR_OFF);
 
 	/* The main switching logic.
-	 * We first restore the whole execution context into the intr_frame
+	 * We first4 restore the whole execution context into the intr_frame
 	 * and then switching to the next thread by calling do_iret.
 	 * Note that, we SHOULD NOT use any stack from here
 	 * until switching is done. */
@@ -744,16 +744,12 @@ bool cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux){
 	return cur_priority > cmp_priority;
 }
 
-/**
- * 	thread_unblock (t);
+bool cmp_sema_priority(struct list_elem *cur,struct list_elem *cmp, void *aux){
+	int cur_priority = list_entry(cur, struct thread, d_elem)->priority;
+	int cmp_priority = list_entry(cmp, struct thread, d_elem)->priority;
 
-	struct thread *cur = running_thread();
-	if (cur->priority < priority)
-	{
-		thread_yield();
-	}
- * 
-*/
+	return cur_priority > cmp_priority;
+}
 
 void 
 max_priority(void){
@@ -767,6 +763,7 @@ max_priority(void){
 	}
 	int curr_priority = thread_current()->priority;
 	list_sort(&ready_list, cmp_priority, NULL);
+
 	struct list_elem *e= list_begin(&ready_list);
 	struct thread *t = list_entry(e, struct thread, elem);
 	

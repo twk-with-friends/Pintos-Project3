@@ -102,8 +102,11 @@ struct thread {
 	int init_priority;
 	struct lock *wait_on_lock;
 	struct list donation;
+<<<<<<< HEAD
 	int nice;
 	int recent_cpu;
+=======
+>>>>>>> d2bc13b6c0ed3e2d808bdc8a3a8a810bcb8d4447
 	struct list_elem d_elem;
 	struct list_elem a_elem;
 
