@@ -27,6 +27,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
 
 /* A kernel thread or user process.
  *
@@ -98,8 +101,11 @@ struct thread {
 	int priority;
 	int init_priority;
 	struct lock *wait_on_lock;
-	struct list *donation;
+	struct list donation;
+	int nice;
+	int recent_cpu;
 	struct list_elem d_elem;
+	struct list_elem a_elem;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -158,4 +164,8 @@ void thread_awake(int64_t ticks);
 
 bool cmp_priority(struct list_elem *cur,struct list_elem *cmp, void *aux);
 void max_priority(void);
+void incre_recent_cpu(void);
+void recal_priority(void);
+void recal_recent_cpu(void);
+void cal_load_avg(void);
 #endif /* threads/thread.h */

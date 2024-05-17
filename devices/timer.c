@@ -127,9 +127,23 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
+  if (thread_mlfqs){
+	incre_recent_cpu();
+	
+	if(timer_ticks() % 4 == 0){
+		recal_priority();
+	
+		if(timer_ticks() % TIMER_FREQ == 00){
+		recal_recent_cpu();
+		cal_load_avg();
+		}
+	}
+  }
   // ticks 가 증가할때마다 awake 작업 수행
   thread_awake (ticks);
 }
+
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
