@@ -66,8 +66,8 @@ static void schedule (void);
 static tid_t allocate_tid (void);
 
 
-static struct list sleep_list;
-static struct list all_list;
+struct list sleep_list;
+struct list all_list;
 static int64_t global_ticks;
 
 int load_avg;
@@ -140,6 +140,7 @@ thread_init (void) {
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT); // 우선순위를 기본값으로 설정
+	list_push_back(&all_list, &initial_thread->a_elem);	
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid (); // 고유 tid를 할당
 	initial_thread->wakeup_tick = 0;
@@ -234,7 +235,9 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	thread_unblock (t);
-
+	if(name != "idle")
+		list_push_back(&all_list, &t->a_elem);
+	// max_priority();
 	struct thread *cur = running_thread();
 	if (cur->priority < priority)
 	{
@@ -332,6 +335,7 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
+	list_remove(&thread_current()->a_elem);
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -364,7 +368,10 @@ thread_set_priority (int new_priority) {
 /* Returns the current thread's priority. */
 int 
 thread_get_priority (void) {
-	return thread_current ()->priority;
+	enum intr_level old_level = intr_disable ();
+	int get_priority = thread_current ()->priority;
+	intr_set_level (old_level);
+	return get_priority;
 }
 
 void
@@ -776,7 +783,8 @@ void
 cal_priority(struct thread *cur_thread){
 	if (cur_thread == idle_thread) 
     	return ;
-  	cur_thread->priority = fp_to_int (add_mixed (div_mixed (cur_thread->recent_cpu, -4), PRI_MAX - cur_thread->nice * 2));
+  	// cur_thread->priority = fp_to_int (add_mixed (div_mixed (cur_thread->recent_cpu, -4), PRI_MAX - cur_thread->nice * 2));
+	cur_thread->priority = PRI_MAX - fp_to_int(cur_thread->recent_cpu/4) - (cur_thread->nice*2);
 }
 
 void
@@ -798,14 +806,14 @@ cal_decay(void){
 
 void
 cal_recent_cpu(struct thread *cur_thread){
-	if (cur_thread == idle_thread)
-    	return ;
+	if (cur_thread == idle_thread) 	
+		return ;
   	cur_thread->recent_cpu = add_mixed (mult_fp (div_fp (mult_mixed (load_avg, 2), add_mixed (mult_mixed (load_avg, 2), 1)), cur_thread->recent_cpu), cur_thread->nice);
 }
 
 void
 incre_recent_cpu(void){
-	struct thread *cur_thread = thread_current();
+	struct thread *cur_thread = thread_current(); 
 
 	if(cur_thread != idle_thread){
 		cur_thread->recent_cpu = add_mixed(cur_thread->recent_cpu,1);

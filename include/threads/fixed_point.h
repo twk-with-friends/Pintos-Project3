@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #define F (1 << 14)
 #define INT_MAX ((1 << 31) - 1)
 #define INT_MIN (-(1 << 31))
@@ -49,6 +48,3 @@ int div_fp (int x, int y) {
 int div_mixed (int x, int n) {
   return x / n;
 }
-=======
-
->>>>>>> d2bc13b6c0ed3e2d808bdc8a3a8a810bcb8d4447
