@@ -42,16 +42,21 @@ tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
-
+	char argv[] = "";
+	char *name_file, *save_ptr;
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
+	name_file = strtok_r(file_name, " ", &save_ptr);
+	strtok_r(file_name, " ", &save_ptr);
 
+	printf("File_name is : %s\n",file_name);
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	// tid = thread_create (name_file, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -65,7 +70,7 @@ initd (void *f_name) {
 #endif
 
 	process_init ();
-
+	printf("Here is init!!");
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -80,9 +85,10 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 			PRI_DEFAULT, __do_fork, thread_current ());
 }
 
-#ifndef VM
+#ifndef VM 
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
+// 부모 프로세스의 페이지 테이블 항목을 자식 프로세스의 페이지 테이블에 복제하는 역할
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	struct thread *current = thread_current ();
@@ -117,23 +123,23 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
 static void
-__do_fork (void *aux) {
+__do_fork (void *aux) { //aux는 부모 프로세스의 정보를 전달하는데 사용되는 매개변수
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if; // 부모 cpu를 복사하는데 사용
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
-	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	memcpy (&if_, parent_if, sizeof (struct intr_frame)); // patent_if를 if에 복사 => 부모 프로세스의 CPU 상태가 자식 프로세스 에게 전달
 
 	/* 2. Duplicate PT */
-	current->pml4 = pml4_create();
+	current->pml4 = pml4_create(); // 자식 프로세스의 페이지 테이블 생성
 	if (current->pml4 == NULL)
 		goto error;
 
-	process_activate (current);
+	process_activate (current); // 현재 프로세스 (자식)을 활성화 
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
@@ -153,13 +159,14 @@ __do_fork (void *aux) {
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
-		do_iret (&if_);
+		do_iret (&if_); // 성공적으로 수행하면 iret을 이용해서 컨텍스트 전환
 error:
 	thread_exit ();
 }
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
+/* 현재 프로세스를 정리하고 새 실행 파일을 로드하며, 새 프로세스의 컨텍스트로 전환하는 책임이 있음 */
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
@@ -172,13 +179,13 @@ process_exec (void *f_name) {
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
-
 	/* We first kill the current context */
+	// 현재 프로세스 리소스 해제 새 프로그램 로드하기 위한 준비
 	process_cleanup ();
-
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -204,6 +211,10 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	for (int i = 0; i < 1000000000; i++)
+	{
+
+	}
 	return -1;
 }
 
@@ -320,6 +331,10 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+/* 
+사용자 프로그램을 메모리에 로드
+실행 파일을 메모리에 로드하고, 실행을 위한 준비 과정을 담당/ 파일의 유효성 검사, 메모리 할당, 세그먼트 로딩, 스택 설정 등의 작업을 표시 
+*/
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -328,20 +343,34 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	char *copy_file_name;
+	char *f_name;
+	char *token, *save_ptr;
+	char *argv[128];
+	int argc = 0;
+	
+	copy_file_name = palloc_get_page(0);
+	if (copy_file_name == NULL)
+		return false;
+	strlcpy(copy_file_name, file_name, PGSIZE);
+
+	f_name = strtok_r(copy_file_name, " ", &save_ptr);
 
 	/* Allocate and activate page directory. */
+	// 가상 주소를 물리 주소로 변환하는 과정의 최상위 테이블 / 가상 메모리의 주소 공간을 관리
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (f_name);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", f_name);
 		goto done;
 	}
 
+	// ELF 헤더를 읽고, 유효성 검사 수행
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -407,15 +436,23 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
+	 for (char *token = strtok_r(file_name, " ", &save_ptr); token != NULL;
+        token = strtok_r(NULL, " ", &save_ptr)) {
+        argv[argc++] = token;
+		printf("%s", token);
+    }
+
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
+	printf("123123123213123123");
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	put_stack(argv,argc,if_);
 
 	success = true;
 
@@ -428,26 +465,32 @@ done:
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
+/* ELF 파일의 프로그램 헤더가 유효한 세그먼트를 설명하는지 검증*/
 static bool
 validate_segment (const struct Phdr *phdr, struct file *file) {
 	/* p_offset and p_vaddr must have the same page offset. */
+	// 페이지 오프셋 일치 여부 검사
 	if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
 		return false;
 
 	/* p_offset must point within FILE. */
+	// 파일 범위 내에서의 p_offset 검사
 	if (phdr->p_offset > (uint64_t) file_length (file))
 		return false;
 
 	/* p_memsz must be at least as big as p_filesz. */
+	// p_memsz와 p_filesz 비교
 	if (phdr->p_memsz < phdr->p_filesz)
 		return false;
 
 	/* The segment must not be empty. */
+	// 세그먼트가 비어있는지 아닌지 비교
 	if (phdr->p_memsz == 0)
 		return false;
 
 	/* The virtual memory region must both start and end within the
 	   user address space range. */
+	// 가상 메모리 주소 범위 검사
 	if (!is_user_vaddr ((void *) phdr->p_vaddr))
 		return false;
 	if (!is_user_vaddr ((void *) (phdr->p_vaddr + phdr->p_memsz)))
@@ -455,6 +498,7 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 
 	/* The region cannot "wrap around" across the kernel virtual
 	   address space. */
+	// 커널 가상 주소 공간으로의 "wrap around"방지
 	if (phdr->p_vaddr + phdr->p_memsz < phdr->p_vaddr)
 		return false;
 
@@ -463,6 +507,7 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	   it then user code that passed a null pointer to system calls
 	   could quite likely panic the kernel by way of null pointer
 	   assertions in memcpy(), etc. */
+	// 페이징 0 매핑 금지
 	if (phdr->p_vaddr < PGSIZE)
 		return false;
 
@@ -535,6 +580,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
+/* 
+커널 모드에서 실행되며, 프로세스가 사용자 모드로 전환할 때 필요한 사용자 스택을 준비하는 역할
+프로세스의 사용자 스택을 초기화하고, 필요한 메모리 페이지를 할당 및 매핑하는 과정을 담당
+*/
 static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
@@ -637,3 +686,52 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
+
+
+void
+put_stack(char **argv, int argc, struct intr_frame *if_){
+	int total_length = 0;
+    int align_size;
+    char *arg;
+
+    // 1. 각 문자열을 스택에 푸시하고, 각 문자열의 길이를 계산
+    for (int i = argc - 1; i >= 0; i--) {
+        int length = strlen(argv[i]) + 1; // 널 문자 포함
+        if_->rsp -= length;
+        memcpy(if_->rsp, argv[i], length);
+        argv[i] = if_->rsp; // 새로운 문자열 주소 업데이트
+        total_length += length;
+
+		printf("Pushed \"%s\" to stack at %p\n", argv[i], (void *)if_->rsp);
+    }
+
+    // 2. 스택 포인터를 8의 배수로 정렬
+    align_size = (8 - (total_length % 8)) % 8;
+    if_->rsp -= align_size;
+    memset(if_->rsp, 0, align_size);
+
+	printf("Aligned stack pointer by %d bytes to %p\n", align_size, (void *)if_->rsp);
+
+    // 3. 각 문자열의 주소와 널 포인터를 스택에 푸시
+    if_->rsp -= sizeof(char*); // 널 포인터 공간 확보
+    *(char**)if_->rsp = 0; // 널 포인터 설정
+
+    for (int i = argc - 1; i >= 0; i--) {
+        if_->rsp -= sizeof(char*);
+        *(char**)if_->rsp = argv[i];
+
+		printf("Pushed address of \"%s\" to stack at %p\n", argv[i], (void *)if_->rsp);
+    }
+
+    // 4. %rsi와 %rdi 설정
+    if_->R.rsi = if_->rsp;
+    if_->R.rdi = argc;
+
+	printf("Set rsi to %p and rdi to %d\n", (void *)if_->R.rsi, if_->R.rdi);
+
+    // 5. 가짜 반환 주소 푸시
+    if_->rsp -= sizeof(void*);
+    *(void**)if_->rsp = 0; // 가짜 반환 주소 설정
+
+	printf("Pushed fake return address to %p\n", (void *)if_->rsp);
+}
