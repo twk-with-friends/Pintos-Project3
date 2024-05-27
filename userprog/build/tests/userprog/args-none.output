@@ -1,0 +1,26 @@
+Kernel command line: -q -f put args-none run args-none
+0 ~ 9fc00 1
+100000 ~ 13e0000 1
+Pintos booting with: 
+	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
+	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
+Page fault at 0: not present error writing page in kernel context.
+Interrupt 0x0e (#PF Page-Fault Exception) at rip=800420798d
+ cr2=0000000000000000 error=               2
+rax 0000000000000000 rbx 0000000000204400 rcx 000000800423b00c rdx 000000800423b030
+rsp 0000008004000f20 rbp 0000008004000f40 rsi 0000008004221829 rdi 000000800423b030
+rip 000000800420798d r8 0000000000800420  r9 0000000004209ab7 r10 0000000000000000
+r11 0000000000000000 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
+r15 0000000000000000 rflags 00200006
+es: 0010 ds: 0010 cs: 0008 ss: 0010
+Kernel PANIC at ../../userprog/exception.c:97 in kill(): Kernel bug - unexpected interrupt in kernel
+Call stack: 0x800421880e 0x800421d5d6 0x800421d786 0x80042095c8 0x80042099e6 0x8004206f01 0x8004206d0e 0x800420610f.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 0 ticks
+Thread: 0 idle ticks, 0 kernel ticks, 0 user ticks
+Console: 1219 characters output
+Keyboard: 0 keys pressed
+Exception: 1 page faults
+Powering off...

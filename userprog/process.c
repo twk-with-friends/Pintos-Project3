@@ -27,6 +27,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+struct thread *get_child_process(int pid);
 
 /* General process initializer for initd and other process. */
 static void
@@ -80,10 +81,20 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
-}
+	struct thread *curr = thread_current();
 
+	memcpy(&curr -> parent_frame, if_, sizeof(struct intr_frame));
+
+	tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, curr);
+
+	if(pid == TID_ERROR)
+		return TID_ERROR;
+
+	struct thread *child = get_child_process(pid);
+	sema_down(&child->child_sema);
+	return pid;
+}
+ 
 #ifndef VM 
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
@@ -97,21 +108,31 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-
+	if is_kernel_vaddr(va) {
+		return false;
+	}
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
-
+	if (parent_page == NULL) {
+		return false;
+	}
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
-
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO);
+	if (newpage == NULL) {
+		return false;
+	}
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		return false;
 	}
 	return true;
 }
@@ -137,6 +158,29 @@ __do_fork (void *aux) { //aux는 부모 프로세스의 정보를 전달하는�
 	current->pml4 = pml4_create(); // 자식 프로세스의 페이지 테이블 생성
 	if (current->pml4 == NULL)
 		goto error;
+	current->file_descriptor_table[0] = parent->file_descriptor_table[0];
+	current->file_descriptor_table[1] = parent->file_descriptor_table[1];
+
+	for (int i = 2; i < FDT_COUNT_LIMIT; i++) {
+		struct file * f = parent->file_descriptor_table[i];
+		if (f == NULL){
+			continue;
+		}
+		current->file_descriptor_table[i] = file_duplicate(f);
+	}
+    
+	current->fdidx = parent->fdidx;
+	sema_up(&current->child_sema);
+	if_.R.rax = 0;
+	process_init ();
+
+	/* Finally, switch to the newly created process. */
+	if (succ)
+		do_iret (&if_);
+
+	current->exit_status = TID_ERROR;
+	sema_up(&current->child_sema);
+	exit(TID_ERROR);
 
 	process_activate (current); // 현재 프로세스 (자식)을 활성화 
 #ifdef VM
@@ -778,4 +822,17 @@ void process_close_file(int fd)
 	if (fd < 2 || fd > FDT_COUNT_LIMIT)
 		return NULL;
 	fdt[fd] = NULL;
+}
+
+struct thread *get_child_process(int pid){
+	struct thread *curr = thread_current();
+	struct list get_list = curr -> child_list;
+
+	for (struct list_elem *e = list_begin(&get_list); e != list_end(&get_list); e = list_next(e)){
+		struct thread *t = list_entry(e, struct thread, child_list_elem);
+		if (t->tid == pid) {
+			return t;
+		}
+	}
+	return NULL;
 }

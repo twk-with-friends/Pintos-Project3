@@ -144,6 +144,7 @@ thread_init (void) {
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid (); // 고유 tid를 할당
 	initial_thread->wakeup_tick = 0;
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -488,9 +489,12 @@ init_thread (struct thread *t, const char *name, int priority) {
   	t->recent_cpu = RECENT_CPU_DEFAULT;
 	list_init(&t->donation);
 	t->magic = THREAD_MAGIC;
+	t->exit_status = 0;
 	t->fdidx = 2; // 0은 stdin, 1은 stdout에 이미 할당
 	t->file_descriptor_table[0] = 1; // stdin 자리(1)
 	t->file_descriptor_table[1] = 2; // stdout 자리(2)
+
+	sema_init (&t->child_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

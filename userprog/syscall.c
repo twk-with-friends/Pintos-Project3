@@ -137,6 +137,7 @@ void halt(void)
 void exit(int status)
 {
 	struct thread *cur = thread_current (); 
+	cur->exit_status = status;
 	printf("%s: exit(%d)\n" , cur -> name , status);
 	thread_exit();
 }
@@ -232,9 +233,7 @@ int write(int fd, const void *buffer, unsigned size)
 	check_address(buffer);
 
 	if (fd == STDIN_fileNO)
-	{
 		return -1;
-	}
 
 	if (fd == STDOUT_fileNO)
 	{

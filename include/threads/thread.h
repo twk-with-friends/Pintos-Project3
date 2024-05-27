@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -112,8 +113,17 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	int exit_status;
+
 	struct file **file_descriptor_table;
 	int fdidx;
+
+	struct list child_list;
+	struct list_elem child_list_elem;
+	struct intr_frame parent_frame;
+
+	struct semaphore child_sema;
+	struct semaphore idle_started;
 	
 
 #ifdef USERPROG
