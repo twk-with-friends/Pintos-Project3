@@ -112,8 +112,6 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE:
 		close(f->R.rdi);
 		break;
-	default:
-		thread_exit();
 	}
 	// thread_exit ();
 }
@@ -171,8 +169,6 @@ int open(const char *file)
 {
 	check_address(file);
 
-	printf("=================================> file : %s\n", file);
-
 	struct file *open_file = filesys_open(file);
 
 	if (open_file == NULL)
@@ -182,6 +178,7 @@ int open(const char *file)
 
     if (fd == -1)
         file_close(open_file);
+	
 
 	return fd;
 }
@@ -281,8 +278,6 @@ void close(int fd)
 	if (file == NULL){
 		exit(-1);
 	}
-
-	printf("!!!!!!!!");	
 	file_close(file);
 	process_close_file(fd);
 }

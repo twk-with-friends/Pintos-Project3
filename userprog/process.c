@@ -27,9 +27,6 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-int process_add_file(struct file *file);
-struct file *process_get_file (int fd);
-void process_close_file(int fd);
 
 /* General process initializer for initd and other process. */
 static void
@@ -229,6 +226,10 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	for (int i = 2 ; i < FDT_COUNT_LIMIT ; i++ ){
+		struct file *file = process_get_file(i);
+		if (file == NULL){
+			break;
+		}
 		close(i);
 	}	
 	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES);
@@ -743,10 +744,11 @@ int process_add_file(struct file *file) {
 	struct thread *t = thread_current();
 	struct file **fdt = t->file_descriptor_table;
 	int fd = t->fdidx; 
-	
+
 	while (fdt[fd] != NULL && fd < FDT_COUNT_LIMIT) {
 		fd++;
 	}
+
 	if (fd >= FDT_COUNT_LIMIT || fd < 2) {
 		return -1;
 	}
@@ -754,7 +756,6 @@ int process_add_file(struct file *file) {
 	t->fdidx = fd;
 	fdt[fd] = file;
 
-	printf("==========================> fdt add : fd : %d",fd);
 	return fd;
 }
 
@@ -765,9 +766,7 @@ struct file *process_get_file(int fd)
 	if (fd < 2 || fd > FDT_COUNT_LIMIT)
 		return NULL;
 	
-	printf("============================> fd : %d", fd);
 	struct file *file = fdt[fd];
-	printf("============================> 가져오냐고");
 	return file;
 }
 
