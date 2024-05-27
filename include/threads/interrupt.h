@@ -34,10 +34,13 @@ struct gp_registers {
 	uint64_t rax;
 } __attribute__((packed));
 
+/*인터럽트 프레임 인터럽트가 발생했을 때 CPU가 저장하는 레지스터 상태와 관련 정보를 담고 있다*/
 struct intr_frame {
 	/* Pushed by intr_entry in intr-stubs.S.
 	   These are the interrupted task's saved registers. */
+	// CPU의 모든 일반 레지스터를 저장
 	struct gp_registers R;
+	/*es와ds는 메모리 세그먼트를 지정하는데 사용*/
 	uint16_t es;
 	uint16_t __pad1;
 	uint32_t __pad2;
@@ -45,6 +48,7 @@ struct intr_frame {
 	uint16_t __pad3;
 	uint32_t __pad4;
 	/* Pushed by intrNN_stub in intr-stubs.S. */
+	// 어떤 인터럽트가 발생했는지 저장
 	uint64_t vec_no; /* Interrupt vector number. */
 /* Sometimes pushed by the CPU,
    otherwise for consistency pushed as 0 by intrNN_stub.
@@ -52,12 +56,17 @@ struct intr_frame {
 	uint64_t error_code;
 /* Pushed by the CPU.
    These are the interrupted task's saved registers. */
+   // 인터럽트가 발생했을 때의 명령어 포인터
 	uintptr_t rip;
+	// 인터럽트가 발생했을 때의 코드 세그먼트
 	uint16_t cs;
 	uint16_t __pad5;
 	uint32_t __pad6;
+	// 인터럽트가 발생했을 때의 CPU 상태
 	uint64_t eflags;
+	// 인터럽트가 발생했을 때의 스택 포인터
 	uintptr_t rsp;
+	// 인터럽트가 발생했을 때의 스택 세그먼트
 	uint16_t ss;
 	uint16_t __pad7;
 	uint32_t __pad8;

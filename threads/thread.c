@@ -210,13 +210,23 @@ thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
 	tid_t tid;
-
 	ASSERT (function != NULL); // 함수 포인터가 유효한지
 
 	/* Allocate thread. */
 	t = palloc_get_page (PAL_ZERO); // 페이지 할당자를 통해 메모리를 할당하고 할당된 메모리를 0으로
 	if (t == NULL)
 		return TID_ERROR;
+
+	t->file_descriptor_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+
+	if (t->file_descriptor_table == NULL) {
+		return TID_ERROR;
+	}
+	
+	t->fdidx = 2; // 0은 stdin, 1은 stdout에 이미 할당
+	t->file_descriptor_table[0] = 1; // stdin 자리(1)
+	t->file_descriptor_table[1] = 2; // stdout 자리(2)
+
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);

@@ -30,6 +30,8 @@ typedef int tid_t;
 #define NICE_DEFAULT 0
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
+#define FDT_PAGES 3
+#define FDT_COUNT_LIMIT 130 // limit fdidx
 
 /* A kernel thread or user process.
  *
@@ -109,6 +111,9 @@ struct thread {
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+
+	struct file **file_descriptor_table;
+	int fdidx;
 	
 
 #ifdef USERPROG

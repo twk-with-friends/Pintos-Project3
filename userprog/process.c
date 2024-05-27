@@ -7,6 +7,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -26,6 +27,9 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+int process_add_file(struct file *file);
+struct file *process_get_file (int fd);
+void process_close_file(int fd);
 
 /* General process initializer for initd and other process. */
 static void
@@ -53,7 +57,6 @@ process_create_initd (const char *file_name) {
 	name_file = strtok_r(file_name, " ", &save_ptr);
 	strtok_r(file_name, " ", &save_ptr);
 
-	printf("File_name is : %s\n",file_name);
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	// tid = thread_create (name_file, PRI_DEFAULT, initd, fn_copy);
@@ -70,7 +73,6 @@ initd (void *f_name) {
 #endif
 
 	process_init ();
-	printf("Here is init!!");
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -185,7 +187,7 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -211,7 +213,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	for (int i = 0; i < 1000000000; i++)
+	for (int i = 0; i < 2000000000; i++)
 	{
 
 	}
@@ -226,7 +228,10 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	for (int i = 2 ; i < FDT_COUNT_LIMIT ; i++ ){
+		close(i);
+	}	
+	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES);
 	process_cleanup ();
 }
 
@@ -439,7 +444,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	 for (char *token = strtok_r(file_name, " ", &save_ptr); token != NULL;
         token = strtok_r(NULL, " ", &save_ptr)) {
         argv[argc++] = token;
-		printf("%s", token);
     }
 
 	/* Set up stack. */
@@ -448,7 +452,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-	printf("123123123213123123");
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
@@ -702,7 +705,7 @@ put_stack(char **argv, int argc, struct intr_frame *if_){
         argv[i] = if_->rsp; // 새로운 문자열 주소 업데이트
         total_length += length;
 
-		printf("Pushed \"%s\" to stack at %p\n", argv[i], (void *)if_->rsp);
+		// printf("Pushed \"%s\" to stack at %p\n", argv[i], (void *)if_->rsp);
     }
 
     // 2. 스택 포인터를 8의 배수로 정렬
@@ -710,7 +713,7 @@ put_stack(char **argv, int argc, struct intr_frame *if_){
     if_->rsp -= align_size;
     memset(if_->rsp, 0, align_size);
 
-	printf("Aligned stack pointer by %d bytes to %p\n", align_size, (void *)if_->rsp);
+	// printf("Aligned stack pointer by %d bytes to %p\n", align_size, (void *)if_->rsp);
 
     // 3. 각 문자열의 주소와 널 포인터를 스택에 푸시
     if_->rsp -= sizeof(char*); // 널 포인터 공간 확보
@@ -720,18 +723,60 @@ put_stack(char **argv, int argc, struct intr_frame *if_){
         if_->rsp -= sizeof(char*);
         *(char**)if_->rsp = argv[i];
 
-		printf("Pushed address of \"%s\" to stack at %p\n", argv[i], (void *)if_->rsp);
+		// printf("Pushed address of \"%s\" to stack at %p\n", argv[i], (void *)if_->rsp);
     }
 
     // 4. %rsi와 %rdi 설정
     if_->R.rsi = if_->rsp;
     if_->R.rdi = argc;
 
-	printf("Set rsi to %p and rdi to %d\n", (void *)if_->R.rsi, if_->R.rdi);
+	// printf("Set rsi to %p and rdi to %d\n", (void *)if_->R.rsi, if_->R.rdi);
 
     // 5. 가짜 반환 주소 푸시
     if_->rsp -= sizeof(void*);
     *(void**)if_->rsp = 0; // 가짜 반환 주소 설정
 
-	printf("Pushed fake return address to %p\n", (void *)if_->rsp);
+	// printf("Pushed fake return address to %p\n", (void *)if_->rsp);
+}
+
+int process_add_file(struct file *file) {
+	struct thread *t = thread_current();
+	struct file **fdt = t->file_descriptor_table;
+	int fd = t->fdidx; 
+	
+	while (fdt[fd] != NULL && fd < FDT_COUNT_LIMIT) {
+		fd++;
+	}
+	if (fd >= FDT_COUNT_LIMIT || fd < 2) {
+		return -1;
+	}
+
+	t->fdidx = fd;
+	fdt[fd] = file;
+
+	printf("==========================> fdt add : fd : %d",fd);
+	return fd;
+}
+
+struct file *process_get_file(int fd)
+{
+	struct thread *t = thread_current();
+	struct file **fdt = t->file_descriptor_table;
+	if (fd < 2 || fd > FDT_COUNT_LIMIT)
+		return NULL;
+	
+	printf("============================> fd : %d", fd);
+	struct file *file = fdt[fd];
+	printf("============================> 가져오냐고");
+	return file;
+}
+
+void process_close_file(int fd)
+{
+	struct thread *t = thread_current();
+	struct file **fdt = t->file_descriptor_table;
+	
+	if (fd < 2 || fd > FDT_COUNT_LIMIT)
+		return NULL;
+	fdt[fd] = NULL;
 }
