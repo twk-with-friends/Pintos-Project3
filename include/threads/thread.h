@@ -123,8 +123,11 @@ struct thread {
 	struct intr_frame parent_frame;
 
 	struct semaphore child_sema;
-	struct semaphore idle_started;
-	
+	struct semaphore exit_sema; 
+	struct semaphore wait_sema;
+
+	struct file *running;
+
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

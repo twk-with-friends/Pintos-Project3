@@ -243,6 +243,7 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+	list_push_back(&thread_current()->child_list, &t->child_list_elem);
 
 	thread_unblock (t);
 	if(name != "idle")
@@ -490,10 +491,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init(&t->child_list);
 	t->magic = THREAD_MAGIC;
 	t->exit_status = 0;
-	// t->fdidx = 2; // 0은 stdin, 1은 stdout에 이미 할당
-	// t->file_descriptor_table[0] = 1; // stdin 자리(1)
-	// t->file_descriptor_table[1] = 2; // stdout 자리(2)
+	t->running = NULL;
+
 	sema_init (&t->child_sema, 0);
+	sema_init (&t->exit_sema, 0);
+	sema_init (&t->wait_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

@@ -6,6 +6,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
+#include "threads/synch.h"
+#include "threads/palloc.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "kernel/stdio.h"
@@ -44,15 +46,16 @@ int write(int fd, const void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
-tid_t fork(const char *thread_name, struct intr_frame *f);
+int fork(const char *thread_name, struct intr_frame *f);
 int exec(const char *cmd_line);
-int wait(tid_t pid);
+int wait(int pid);
 
 void syscall_init(void)
 {
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48 |
 							((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t)syscall_entry);
+	// lock_init(&filesys_lock);
 
 	/* The interrupt service rountine should not serve any interrupts
 	 * until the syscall_entry swaps the userland stack to the kernel
@@ -77,7 +80,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK:
-		f->R.rax = fork(f->R.rdi, f-> R.rsi);
+		f->R.rax = fork(f->R.rdi, f);
 		break;
 	case SYS_EXEC:
 		f->R.rax = exec(f->R.rdi);
@@ -144,14 +147,28 @@ void exit(int status)
 
 int exec(const char *cmd_line)
 {
+		check_address(cmd_line);
+
+		char *file_name = palloc_get_page(PAL_ZERO);
+
+		if(file_name == NULL)
+			exit(-1);
+		
+		strlcpy(file_name, cmd_line, PGSIZE);
+
+		if(process_exec(file_name) == -1)
+			exit(-1);
 }
 
-int wait(tid_t pid)
+int wait(int pid)
 {
+	return process_wait(pid);
+
 }
 
-tid_t fork(const char *thread_name, struct intr_frame *f)
+int fork(const char *thread_name, struct intr_frame *f)
 {
+	return process_fork(thread_name, f);
 }
 
 bool create(const char *file, unsigned initial_size)
@@ -174,6 +191,10 @@ int open(const char *file)
 
 	if (open_file == NULL)
 		return -1;
+
+	if(strcmp(thread_name(), file) == 0) {
+		file_deny_write(open_file);
+	}
 
 	int fd = process_add_file(open_file);
 
@@ -223,7 +244,9 @@ int read(int fd, void *buffer, unsigned size)
 		}
 	}
 	else{
+		// lock_acquire(&filesys_lock);
 		byte = file_read(file, buffer, size);
+		// lock_release(&filesys_lock);
 	}
 	return byte;
 }
@@ -232,23 +255,63 @@ int write(int fd, const void *buffer, unsigned size)
 {
 	check_address(buffer);
 
-	if (fd == STDIN_fileNO)
+	// lock_acquire(&filesys_lock);
+	
+	if (fd == STDIN_fileNO){
+		// lock_release(&filesys_lock);
 		return -1;
+	}
+
 
 	if (fd == STDOUT_fileNO)
 	{
 		putbuf(buffer, size);
+		// lock_release(&filesys_lock);
 		return size;
 	}
 
 	int byte;
 	struct file *file = process_get_file(fd);
 
-	if(file == NULL)
+	if(file == NULL){
+		// lock_release(&filesys_lock);
 		return -1; 
+	}
+	
+	// lock_release(&filesys_lock);
 	
 	return (int)file_write(file, buffer, size);
 }
+
+// int write(int fd, const void *buffer, unsigned size)
+// {
+// 	check_address(buffer);
+// 	int byte;
+
+// 	if (fd == STDIN_fileNO){
+// 		return -1;
+// 	}
+
+// 	struct file *file = process_get_file(fd);
+	
+// 	if(file == NULL){
+// 		return -1; 
+// 	}
+
+// 	// lock_acquire(&filesys_lock);
+
+// 	if (fd == STDOUT_fileNO)
+// 	{
+// 		putbuf(buffer, size);
+// 		byte = size;
+// 	}
+
+// 	byte = (int)file_write(file, buffer, size);
+	
+// 	// lock_release(&filesys_lock);
+	
+// 	return byte;
+// }
 
 void seek(int fd, unsigned position)
 {
