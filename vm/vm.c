@@ -59,7 +59,36 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 err:
 	return false;
 }
+// bool
+// hash_init (struct hash *h, 
+// 			hash_hash_func *hash, hash_less_func *less, void *aux) {
+// 	h->elem_cnt = 0;
+// 	h->bucket_cnt = 4;
+// 	h->buckets = malloc (sizeof *h->buckets * h->bucket_cnt);
+// 	h->hash = hash;
+// 	h->less = less;
+// 	h->aux = aux;
 
+// 	if (h->buckets != NULL) {
+// 		hash_clear (h, NULL);
+// 		return true;
+// 	} else
+// 		return false;
+// }
+unsigned page_hash(const struct hash_elem *h1,void *aux UNUSED){
+	const struct page *p2=hash_entry(p2,struct page, hash_elem);
+	return hash_bytes(&p2->va,sizof(p2->va));
+	//va라는 애의 해시값을 구하려면 들어가는 값이 void와 sizeof void이므로
+}
+bool page_less(const struct hash_elem *a1, const struct hash_elem *b1,void *aux UNUSED){
+	const struct page *a2= hash_entry(a1,struct page,hash_elem);
+	const struct page *b2= hash_entry(b1,struct page, hash_elem);
+	return a2->va<b2->va;//이렇게 하면 자연스럽게 a2가 작아야 true리턴
+}
+void supplemental_page_table_init (struct supplemental_page_table *spt UNUSED){
+	hash_init(&spt->sup_hash,page_hash,page_less,NULL);
+	//hash_hash_func : 주어진 aux 데이터에서 해시 요소에 대한 해시 값을 계산 후 hash_bytes와 sizeof로 크기에 대한 계산 하여 반환
+}
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
