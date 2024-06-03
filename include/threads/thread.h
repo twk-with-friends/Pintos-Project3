@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include "threads/interrupt.h"
+#include "lib/kernel/hash.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -127,7 +128,6 @@ struct thread {
 	struct semaphore wait_sema;
 
 	struct file *running;
-
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

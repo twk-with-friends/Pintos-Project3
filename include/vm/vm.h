@@ -37,24 +37,24 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
-struct vm_entry {
-	uint8_t type;
-	void *vaddr;
-	bool writable;
+// struct vm_entry {
+// 	uint8_t type;
+// 	void *vaddr;
+// 	bool writable;
 
-	bool is_loaded;
-	struct file* file;
+// 	bool is_loaded;
+// 	struct file* file;
 
-	struct list_elem mmap_elem;
+// 	struct list_elem mmap_elem;
 
-	size_t offset;
-	size_t read_byte;
-	size_t zero_byte;
+// 	size_t offset;
+// 	size_t read_byte;
+// 	size_t zero_byte;
 
-	size_t swap_slot;
+// 	size_t swap_slot;
 
-	struct hash_elem hash_elem;
-};
+// 	struct hash_elem hash_elem;
+// };
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
@@ -63,9 +63,10 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-	// struct hash_elem hash_elem;
-	/* Your implementation */
 
+	/* Your implementation */
+    struct hash_elem hash_elem;
+	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -82,6 +83,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
