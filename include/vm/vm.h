@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -36,6 +37,24 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
+struct vm_entry {
+	uint8_t type;
+	void *vaddr;
+	bool writable;
+
+	bool is_loaded;
+	struct file* file;
+
+	struct list_elem mmap_elem;
+
+	size_t offset;
+	size_t read_byte;
+	size_t zero_byte;
+
+	size_t swap_slot;
+
+	struct hash_elem hash_elem;
+};
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
@@ -44,7 +63,7 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-
+	// struct hash_elem hash_elem;
 	/* Your implementation */
 
 	/* Per-type data are binded into the union.
@@ -85,6 +104,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash spt_hash;
 };
 
 #include "threads/thread.h"

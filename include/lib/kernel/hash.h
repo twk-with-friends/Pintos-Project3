@@ -1,6 +1,7 @@
 #ifndef __LIB_KERNEL_HASH_H
 #define __LIB_KERNEL_HASH_H
 
+
 /* Hash table.
  *
  * This data structure is thoroughly documented in the Tour of
@@ -39,6 +40,7 @@ struct hash_elem {
 	((STRUCT *) ((uint8_t *) &(HASH_ELEM)->list_elem        \
 		- offsetof (STRUCT, MEMBER.list_elem)))
 
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *) 0)->MEMBER)
 /* Computes and returns the hash value for hash element E, given
  * auxiliary data AUX. */
 typedef uint64_t hash_hash_func (const struct hash_elem *e, void *aux);

@@ -6,7 +6,7 @@
 // #include "intrinsic.h"
 
 
-struct lock filesys_lock;
+// struct lock filesys_lock;
 void syscall_init (void);
 void check_address(void *addr);
 void halt(void);

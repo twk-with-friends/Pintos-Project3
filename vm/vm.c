@@ -1,8 +1,9 @@
-/* vm.c: Generic interface for virtual memory objects. */
+ /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "lib/kernel/hash.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -65,7 +66,6 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
-
 	return page;
 }
 
@@ -174,6 +174,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+		hash_init(&spt->spt_hash, hash_hash_func, hash_less_func, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -187,4 +188,17 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+// hash 함수
+uint64_t hash_hash_func (const struct hash_elem *e, void *aux){
+	const struct vm_entry *p = hash_entry(e,struct vm_entry, hash_elem);
+	return hash_bytes(p->vaddr,sizeof(p->vaddr));
+}
+
+bool hash_less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux){
+	const struct vm_entry *p_a = hash_entry(a, struct vm_entry, hash_elem);
+	const struct vm_entry *p_b = hash_entry(b, struct vm_entry, hash_elem); 
+
+	return p_a->vaddr < p_b->vaddr;
 }

@@ -18,6 +18,7 @@
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
+struct lock filesys_lock;
 
 /* System call.
  *
@@ -251,37 +252,6 @@ int read(int fd, void *buffer, unsigned size)
 	return byte;
 }
 
-int write(int fd, const void *buffer, unsigned size)
-{
-	check_address(buffer);
-
-	// lock_acquire(&filesys_lock);
-	
-	if (fd == STDIN_fileNO){
-		// lock_release(&filesys_lock);
-		return -1;
-	}
-
-
-	if (fd == STDOUT_fileNO)
-	{
-		putbuf(buffer, size);
-		// lock_release(&filesys_lock);
-		return size;
-	}
-
-	int byte;
-	struct file *file = process_get_file(fd);
-
-	if(file == NULL){
-		// lock_release(&filesys_lock);
-		return -1; 
-	}
-	
-	// lock_release(&filesys_lock);
-	
-	return (int)file_write(file, buffer, size);
-}
 
 // int write(int fd, const void *buffer, unsigned size)
 // {
@@ -298,20 +268,47 @@ int write(int fd, const void *buffer, unsigned size)
 // 		return -1; 
 // 	}
 
-// 	// lock_acquire(&filesys_lock);
 
 // 	if (fd == STDOUT_fileNO)
 // 	{
 // 		putbuf(buffer, size);
 // 		byte = size;
+// 		return byte;
 // 	}
 
+// 	lock_acquire(&filesys_lock);
 // 	byte = (int)file_write(file, buffer, size);
+// 	lock_release(&filesys_lock);
 	
-// 	// lock_release(&filesys_lock);
 	
 // 	return byte;
 // }
+
+int write(int fd, const void *buffer, unsigned size) {
+    check_address(buffer);
+    if (fd == STDIN_fileNO) {
+        return -1;
+    }
+
+    if (fd == STDOUT_fileNO) {
+        putbuf(buffer, size);
+        return size;
+    }
+
+    struct file *file = process_get_file(fd);
+    if (file == NULL) {
+        return -1;
+    }
+
+    int byte;
+
+    lock_acquire(&filesys_lock);
+    byte = (int)file_write(file, buffer, size);
+    lock_release(&filesys_lock);
+
+    return byte;
+}
+
 
 void seek(int fd, unsigned position)
 {
