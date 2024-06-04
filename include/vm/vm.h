@@ -69,8 +69,8 @@ struct page {
 	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
-	union {
 		struct uninit_page uninit;
+	union {
 		struct anon_page anon;
 		struct file_page file;
 #ifdef EFILESYS

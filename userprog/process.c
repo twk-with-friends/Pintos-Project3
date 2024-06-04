@@ -19,9 +19,10 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
-#ifdef VM
+#ifdef vm
 #include "vm/vm.h"
 #endif
+
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
@@ -684,6 +685,20 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct load_aux *load_aux = (struct load_aux*)aux;
+	struct file *file = load_aux->file;
+	off_t offset = load_aux->offset;
+	size_t read_bytes = load_aux->read_bytes;
+    size_t zero_bytes = load_aux->zero_bytes;
+	file_seek(file,offset);
+
+	if (file_read(file, page->frame->kva, read_bytes) != (int)read_bytes) { 
+		palloc_free_page(page->frame->kva);
+        return false;
+    }
+    memset(page->frame->kva + read_bytes, 0, zero_bytes);
+	free(load_aux);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -715,15 +730,24 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		struct load_aux *load_aux = malloc(sizeof(struct load_aux));
+		
+		load_aux->file = file;
+		load_aux->offset = ofs;
+		load_aux->read_bytes = read_bytes;
+		load_aux->zero_bytes = zero_bytes;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, load_aux)){
+			free(load_aux);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;  // 오프셋(ofs) 갱신
 	}
 	return true;
 }
@@ -738,6 +762,13 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1)){
+		success = true;
+		success = vm_claim_page(stack_bottom);
+		
+		if (success)	
+			if_->rsp=USER_STACK;
+	}
 
 	return success;
 }
