@@ -140,21 +140,14 @@ page_fault (struct intr_frame *f) {
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
 
+
 #ifdef VM
 	/* For project 3 and later. */
-	/*
-		먼저 유효(valid)한 Page Fault인지 확인
-		Bogus Fault는 페이지에 일부 내용을 로드하고 유저 프로그램으로 컨트롤을 반환함
-
-		세가지 Bogus Fault
-		lazy-loaded, swapped-out page, write-protected page
-		지금은 lazy-loaded만 처리
-	*/
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 #endif
-	// exit(-1);
-
+	exit(-1);
+    
 	/* Count page faults. */
 	page_fault_cnt++;
 
@@ -164,7 +157,6 @@ page_fault (struct intr_frame *f) {
 			not_present ? "not present" : "rights violation",
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
-	
 	kill (f);
 }
 

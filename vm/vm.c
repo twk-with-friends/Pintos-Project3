@@ -1,5 +1,6 @@
   /* vm.c: Generic interface for virtual memory objects. */
 
+#include <string.h>
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
@@ -8,6 +9,8 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include "lib/kernel/list.h"
+#include "userprog/process.h"
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 struct list frame_table;
@@ -47,7 +50,7 @@ static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 uint64_t hash_func (const struct hash_elem *e, void *aux);
 bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
-struct page *page_find (const void *va, struct hash *pages);
+void hash_action_destroy (struct hash_elem *e, void *aux UNUSED);
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
@@ -98,6 +101,13 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
     struct page *page = (struct page *)malloc(sizeof(struct page));
     struct hash_elem *e;
     page->va = pg_round_down(va);
+	// printf("====================\n");
+	// printf("Claim va: %p\n", page->va);
+    // struct hash_iterator it;
+    // for (hash_first(&it, &spt->spt_hash); hash_next(&it);) {
+    //     struct page *p = hash_entry(hash_cur(&it), struct page, hash_elem);
+    //     printf("Page va: %p\n", p->va);
+    // }
     e = hash_find(&spt->spt_hash, &page->hash_elem);
     free(page);
     return e != NULL ? hash_entry(e, struct page, hash_elem): NULL;
@@ -253,8 +263,34 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst, struct supplemental_page_table *src) {
+    struct hash_iterator iter;
+	struct hash *src_hash = &src->spt_hash;
+    struct hash *dst_hash = &dst->spt_hash;
+    hash_first (&iter, &src->spt_hash);
+
+    while (hash_next (&iter)) {
+        const struct page *p = hash_entry (hash_cur (&iter), struct page, hash_elem);
+		enum vm_type type = p->operations->type;
+
+		if(type == VM_UNINIT){
+			struct uninit_page *uninit = &p->uninit;
+			struct load_aux *load_aux =  (struct load_aux*)uninit->aux;
+
+			struct load_aux *child_load_aux = malloc(sizeof(struct load_aux));
+			memcpy(child_load_aux,load_aux,sizeof(struct load_aux));
+			child_load_aux->file = file_duplicate(load_aux->file);
+			
+			vm_alloc_page_with_initializer(uninit->type,p->va,p->writable,uninit->init,child_load_aux);
+			vm_claim_page(p->va);
+		}else{
+			vm_alloc_page(p->operations->type, p->va, true); 
+			vm_claim_page(p->va); 
+			memcpy(p->va, p->frame->kva, PGSIZE);  
+		}
+
+    }
+    return true;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -262,6 +298,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_clear(&spt->spt_hash, hash_action_destroy);
 }
 
 // hash 함수
@@ -284,5 +321,14 @@ bool page_delete(struct hash *hash, struct page *page) {
 void spt_destroy (struct hash_elem *e, void *aux UNUSED) {
     struct page *page = hash_entry(e, struct page, hash_elem);
 
-    free(page);
+    free(page);  
+}
+
+void hash_action_destroy (struct hash_elem *e, void *aux UNUSED) {
+    struct page *page = hash_entry(e, struct page, hash_elem);
+
+     if (page != NULL) {
+        destroy(page);  
+        free(page);  
+    }
 }
