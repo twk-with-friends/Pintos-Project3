@@ -179,6 +179,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	palloc_get_page(PAL_USER|PAL_ZERO);
 }
 
 /* Handle the fault on write_protected page */
@@ -198,13 +199,15 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
     if (is_kernel_vaddr(addr))
         return false;
 
-    if (not_present) // 접근한 메모리의 physical page가 존재하지 않은 경우
-    {
+    if (not_present) 
+    {	
+		if (addr < f->rsp)
+			vm_stack_growth(addr);
         /* TODO: Validate the fault */
         page = spt_find_page(spt, addr);
         if (page == NULL)
             return false;
-        if (write == 1 && page->writable == 0) // write 불가능한 페이지에 write 요청한 경우
+        if (write == true && page->writable == false) 
             return false;
         return vm_do_claim_page(page);
     }
