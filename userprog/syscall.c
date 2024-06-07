@@ -71,7 +71,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	int syscall_num = f->R.rax;
 
 	check_address(f->rsp);
-
+	thread_current()->rsp = f->rsp;
 	switch (syscall_num)
 	{
 	case SYS_HALT:
@@ -238,7 +238,7 @@ int read(int fd, void *buffer, unsigned size)
 		for (int i = 0 ; i < size ; i++){
 			input = input_getc();
 			if (input == "\n")
-				break;
+				break;	
 			*buf = input;
 			buf++;
 			byte++;
@@ -302,9 +302,9 @@ int write(int fd, const void *buffer, unsigned size) {
 
     int byte;
 
-    lock_acquire(&filesys_lock);
+    // lock_acquire(&filesys_lock);
     byte = (int)file_write(file, buffer, size);
-    lock_release(&filesys_lock);
+    // lock_release(&filesys_lock);
 
     return byte;
 }
