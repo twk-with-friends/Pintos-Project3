@@ -292,7 +292,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst, struct supple
 			vm_alloc_page_with_initializer(uninit->type,p->va,p->writable,uninit->init,child_load_aux);
 			vm_claim_page(p->va);
 		}else{
-			vm_alloc_page(p->operations->type, p->va, true); 
+			vm_alloc_page(p->operations->type, p->va, p->writable); 
 			vm_claim_page(p->va); 
 			memcpy(p->va, p->frame->kva, PGSIZE);  
 		}
@@ -334,9 +334,6 @@ void spt_destroy (struct hash_elem *e, void *aux UNUSED) {
 
 void hash_action_destroy (struct hash_elem *e, void *aux UNUSED) {
     struct page *page = hash_entry(e, struct page, hash_elem);
-
-     if (page != NULL) {
-        destroy(page);  
-        free(page);  
-    }
+    destroy(page);  
+    free(page);  
 }

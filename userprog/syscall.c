@@ -56,7 +56,7 @@ void syscall_init(void)
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48 |
 							((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t)syscall_entry);
-	// lock_init(&filesys_lock);
+	lock_init(&filesys_lock);
 
 	/* The interrupt service rountine should not serve any interrupts
 	 * until the syscall_entry swaps the userland stack to the kernel
@@ -231,7 +231,6 @@ int read(int fd, void *buffer, unsigned size)
 
 	if(file == NULL)
 		return -1;
-	
 	if (fd == STDIN_fileNO){
 		char *input;
 
@@ -245,44 +244,17 @@ int read(int fd, void *buffer, unsigned size)
 		}
 	}
 	else{
-		// lock_acquire(&filesys_lock);
+		struct page *page = spt_find_page(&thread_current()->spt, buffer);
+
+		if (page != NULL && !page->writable)
+			exit(-1);
+
+		lock_acquire(&filesys_lock);
 		byte = file_read(file, buffer, size);
-		// lock_release(&filesys_lock);
+		lock_release(&filesys_lock);
 	}
 	return byte;
 }
-
-
-// int write(int fd, const void *buffer, unsigned size)
-// {
-// 	check_address(buffer);
-// 	int byte;
-
-// 	if (fd == STDIN_fileNO){
-// 		return -1;
-// 	}
-
-// 	struct file *file = process_get_file(fd);
-	
-// 	if(file == NULL){
-// 		return -1; 
-// 	}
-
-
-// 	if (fd == STDOUT_fileNO)
-// 	{
-// 		putbuf(buffer, size);
-// 		byte = size;
-// 		return byte;
-// 	}
-
-// 	lock_acquire(&filesys_lock);
-// 	byte = (int)file_write(file, buffer, size);
-// 	lock_release(&filesys_lock);
-	
-	
-// 	return byte;
-// }
 
 int write(int fd, const void *buffer, unsigned size) {
     check_address(buffer);
@@ -302,9 +274,9 @@ int write(int fd, const void *buffer, unsigned size) {
 
     int byte;
 
-    // lock_acquire(&filesys_lock);
+    lock_acquire(&filesys_lock);
     byte = (int)file_write(file, buffer, size);
-    // lock_release(&filesys_lock);
+    lock_release(&filesys_lock);
 
     return byte;
 }
@@ -340,3 +312,11 @@ void close(int fd)
 	file_close(file);
 	process_close_file(fd);
 }
+
+int mmap(int fd, void *addr){
+
+}
+
+// void munmap(mapid_t mapid){
+
+// }
