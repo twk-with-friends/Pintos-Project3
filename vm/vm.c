@@ -145,12 +145,11 @@ vm_get_victim (void) {
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *
-	vm_evict_frame (void) {
-    // project 3
-    struct frame *victim = vm_get_victim ();
-    /* TODO: swap out the victim and return the evicted frame. */
-    swap_out(victim->page);
-    return victim; // return NULL;로 되어있었다
+vm_evict_frame (void) {
+	struct frame *victim = vm_get_victim ();
+	/* TODO: swap out the victim and return the evicted frame. */
+	swap_out(victim->page);
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -181,7 +180,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
-	vm_alloc_page(VM_ANON | VM_MARKER_0, pg_round_down(addr), 1);
+	vm_alloc_page(VM_ANON | VM_MARKER_0, addr, true);
 }
 
 /* Handle the fault on write_protected page */
@@ -190,8 +189,8 @@ vm_handle_wp (struct page *page UNUSED) {
 }
 
 /* Return true on success */
-bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr ,
-                         bool user, bool write UNUSED, bool not_present UNUSED)
+bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
+                         bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
     struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
     struct page *page = NULL;
@@ -202,16 +201,23 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr ,
     if (is_kernel_vaddr(addr))
         return false;
 
-	if (not_present) { //접근하려는 페이지가 물리 메모리에 존재하지 않을 경우
-		void *rsp = f->rsp;
-		if(!user) {
-			rsp = thread_current()->rsp;
-		}
-		if ((USER_STACK - (1 << 20) <= rsp - 8 && rsp - 8 <= addr && addr <= USER_STACK)){
-			vm_stack_growth(addr);
-		}
+	
+    if (not_present) 
+    {	
+        /* TODO: Validate the fault */
+		void *rsp = is_kernel_vaddr(f->rsp)?thread_current()->rsp:f->rsp;
+
+		if (USER_STACK - 0x100000 <= addr && USER_STACK >= addr && rsp-8 <= addr)
+			vm_stack_growth(pg_round_down(addr));
+			
+        page = spt_find_page(spt, addr);
+        if (page == NULL)
+            return false;
+        if (write == true && page->writable == false) 
+            return false;
+        return vm_do_claim_page(page);
+    }
     return false;
-}
 }
 
 /* Free the page.
