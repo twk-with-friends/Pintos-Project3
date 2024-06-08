@@ -246,6 +246,9 @@ bool create(const char *file, unsigned initial_size)
 {
 	check_address(file);
 	return filesys_create(file, initial_size);
+	    if (!file)
+        exit(-1);
+    
 }
 
 bool remove(const char *file)
@@ -257,7 +260,7 @@ bool remove(const char *file)
 int open(const char *file)
 {
 	check_address(file);
-
+	if(file==NULL)return -1;
 	struct file *open_file = filesys_open(file);
 
 	if (open_file == NULL)
