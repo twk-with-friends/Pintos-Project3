@@ -45,14 +45,4 @@ static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 }
-
 /* Do the mmap */
-void *
-do_mmap (void *addr, size_t length, int writable,
-		struct file *file, off_t offset) {
-}
-
-/* Do the munmap */
-void
-do_munmap (void *addr) {
-}

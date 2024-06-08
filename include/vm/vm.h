@@ -2,7 +2,18 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
+#include "filesys/off_t.h"
 
+struct lazy_load_info {
+	struct file *file;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+	off_t offset;
+};
+void *
+do_mmap (void *addr, size_t length, int writable,
+		struct file *file, off_t offset);
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -36,6 +47,24 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
+// struct vm_entry {
+// 	uint8_t type;
+// 	void *vaddr;
+// 	bool writable;
+
+// 	bool is_loaded;
+// 	struct file* file;
+
+// 	struct list_elem mmap_elem;
+
+// 	size_t offset;
+// 	size_t read_byte;
+// 	size_t zero_byte;
+
+// 	size_t swap_slot;
+
+// 	struct hash_elem hash_elem;
+// };
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
@@ -44,13 +73,14 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-
+	size_t page_cnt;
 	/* Your implementation */
-
+    struct hash_elem hash_elem;
+	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
-	union {
 		struct uninit_page uninit;
+	union {
 		struct anon_page anon;
 		struct file_page file;
 #ifdef EFILESYS
@@ -63,6 +93,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
@@ -85,6 +116,14 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash spt_hash;
+};
+struct necessary_info
+{
+    struct file *file;
+    off_t ofs;
+    uint32_t read_byte;
+    uint32_t zero_byte;
 };
 
 #include "threads/thread.h"

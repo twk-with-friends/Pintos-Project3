@@ -1,11 +1,12 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
-
+#define VM
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
 #include "threads/interrupt.h"
+#include "lib/kernel/hash.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -128,7 +129,6 @@ struct thread {
 
 	struct file *running;
 
-
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -136,6 +136,7 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+	void *rsp;
 #endif
 
 	/* Owned by thread.c. */
