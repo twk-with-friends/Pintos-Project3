@@ -1,5 +1,5 @@
   /* vm.c: Generic interface for virtual memory objects. */
-
+//22fail코드입니다.
 #include <string.h>
 #include "threads/malloc.h"
 #include "vm/vm.h"
