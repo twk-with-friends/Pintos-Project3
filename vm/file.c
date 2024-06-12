@@ -41,16 +41,10 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page  = &page->file;
 
-	ASSERT(page->frame->kva == kva); // #ifdef DBG check
-
+	ASSERT(page->frame->kva == kva); 
 	void *addr = page->va;
-	//struct thread *t = thread_current();
-
-	//aren't these already set in vm_do_claim_page?
-	//page->frame->kva = kva; 
-	//pml4_set_page(t->pml4, addr, kva, true); // writable true, as we are writing into the frame
 
 	struct file *file = file_page->file;
 	size_t length = file_page->length;
@@ -89,7 +83,7 @@ file_backed_swap_out (struct page *page) {
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page  = &page->file;
 	close(file_page->file);
 }
 
@@ -107,12 +101,10 @@ lazy_load_segment_for_file(struct page *page, void *aux)
 
 	file_seek(file, offset);
 
-	//vm_do_claim_page(page);
-	ASSERT (page->frame != NULL); 	//이 상황에서 page->frame이 제대로 설정돼있는가?
+	ASSERT (page->frame != NULL); 	
 	void * kva = page->frame->kva;
 	if (file_read(file, kva, page_read_bytes) != (int)page_read_bytes)
 	{
-		//palloc_free_page(page); // #ifdef DBG Q. 여기서 free해주는거 맞아?
 		free(lazy_load_info);
 		return false;
 	}
@@ -120,7 +112,7 @@ lazy_load_segment_for_file(struct page *page, void *aux)
 	memset(kva + page_read_bytes, 0, page_zero_bytes);
 	free(lazy_load_info);
 
-	file_seek(file, offset); // may read the file later - reset fileobj pos
+	file_seek(file, offset); 
 
 	return true;
 }
