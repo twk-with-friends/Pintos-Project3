@@ -79,41 +79,39 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
 
 	return do_mmap(addr, length, writable, file, offset);
 }
-void
-do_munmap (void *addr) {
+void do_munmap (void *addr) {
 	struct thread *t = thread_current();
 	struct page *page;
 
 	page = spt_find_page(&t->spt, addr);
-	//int prev_cnt = 0;
-	int prev_cnt = page->page_cnt - 1; //if the file size is bigger than memmory space, first page of consecutive file-pages in memory is not the first page of the file.
+	int prev_cnt = page->page_cnt - 1; // if the file size is bigger than memory space, first page of consecutive file-pages in memory is not the first page of the file.
 
 	// Check if the page is file_page or uninit_page to be transmuted into file_page and then its consecutive
 	while(page != NULL 
 		&& (page->operations->type == VM_FILE 
 			|| (page->operations->type == VM_UNINIT && page->uninit.type == VM_FILE))
 		&& page->page_cnt == prev_cnt + 1){
+		
+		// If the page is dirty, write it back to the file
 		if(pml4_is_dirty(t->pml4, addr)){
 			struct file *file = page->file.file;
 			size_t length = page->file.length;
 			off_t offset = page->file.offset;
 
 			if(file_write_at(file, addr, length, offset) != length){
+				// Log an error or handle the write-back failure
 				// #ifdef DBG
-				// TODO - Not properly written-back
+				// printf("Error: Not properly written-back\n");
+				// #endif
 			}
 		}	
 
 		prev_cnt = page->page_cnt;
 
-		// removed from the process's list of virtual pages.
-		// pml4_clear_page(thread_current()->pml4, page->va);
-		// destroy(page);
-		// free(page->frame);
-		// free(page);
-		//remove_page(page);
+		// Remove the page from the process's list of virtual pages
 		spt_remove_page(&t->spt, page);
 
+		// Move to the next page
 		addr += PGSIZE;
 		page = spt_find_page(&t->spt, addr);
 	}
