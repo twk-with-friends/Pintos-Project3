@@ -97,7 +97,7 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va ) {
     /* TODO: Fill this function. */
     struct page *page = (struct page *)malloc(sizeof(struct page));
     struct hash_elem *e;
