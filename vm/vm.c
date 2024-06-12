@@ -8,6 +8,7 @@
 #include "lib/kernel/hash.h"
 #include "lib/round.h"
 #include "threads/vaddr.h"
+#include "vm/file.h"
 #include "threads/mmu.h"
 #include "lib/kernel/list.h"
 #include "userprog/process.h"
@@ -352,42 +353,72 @@ bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux
     return a->va < b->va;
 }
 void *
-do_mmap(void *addr, size_t length, int writable,
-        struct file *file, off_t offset)
-{
-    // offset ~ length
-    void *ret = addr;
-    struct file *open_file = file_reopen(file);
+do_mmap (void *addr, size_t length, int writable,
+		struct file *file, off_t offset) {
 
-    if (open_file == NULL)
-        return NULL;
+	// ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
+	// ASSERT(ofs % PGSIZE == 0);
 
-    size_t read_byte = file_length(file) < length ? file_length(file) : length;
-    size_t zero_byte = PGSIZE - read_byte % PGSIZE;
 
-    ASSERT((read_byte + zero_byte) % PGSIZE == 0);
-    ASSERT(pg_ofs(addr) == 0);
-    ASSERT(offset % PGSIZE == 0);
+	void *start_addr = addr; // return value or in case of fail - free from this addr
+	struct thread *t = thread_current();
+	struct page *page;
+	int page_cnt = 1; // How many consecutive pages are mapped with file?
 
-    while (read_byte > 0 || zero_byte > 0)
-    {
-        size_t page_read_bytes = read_byte < PGSIZE ? read_byte : PGSIZE;
-        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+	size_t flen = file_length(file) - offset; // file left for reading
 
-        struct necessary_info *nec = (struct necessary_info *)malloc(sizeof(struct necessary_info));
-        nec->file = open_file;
-        nec->ofs = offset;
-        nec->read_byte = page_read_bytes;
-        nec->zero_byte = page_zero_bytes;
+	// file_seek(file, offset); // change offset itself
+	
+	// allocate at least one page
+	// throw off data that sticks out 
+	while(length > 0){
+		// Fail : pages mapped overlaps other existing pages or kernel memory
+		if(spt_find_page(&t->spt, addr) != NULL || is_kernel_vaddr(addr)){
+			void *free_addr = start_addr; // get page from this user vaddr and destroy them
+			while(free_addr < addr){
+				// free allocated uninit page
+				page = spt_find_page(&t->spt, free_addr);
 
-        if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_segment, nec))
-            return NULL;
+				// destroy(page); // uninit destroy - free aux
+				// free(page->frame);
+				// free(page);
+				// remove_page(page);
+				spt_remove_page(&t->spt, page);
 
-        read_byte -= page_read_bytes;
-        zero_byte -= page_zero_bytes;
-        addr += PGSIZE;
-        offset += page_read_bytes;
-    }
 
-    return ret;
+				free_addr += PGSIZE;
+			}
+			return NULL;
+		}
+
+		size_t page_read_bytes = MIN(length, flen) < PGSIZE ? MIN(length, flen) : PGSIZE;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		#ifdef DBG
+		printf("(do_mmap) File length %d - read length %d\n", file_length(file), length);
+		#endif
+
+		// file info to load onto memory once fault occurs
+		struct lazy_load_info *lazy_load_info = malloc(sizeof(struct lazy_load_info));
+		lazy_load_info->file = file_reopen(file); // mmap-close - closing file after mmap
+		lazy_load_info->page_read_bytes = page_read_bytes;
+		lazy_load_info->page_zero_bytes = page_zero_bytes;
+		lazy_load_info->offset = offset;
+		void *aux = lazy_load_info;
+		if (!vm_alloc_page_with_initializer(VM_FILE, addr,
+											writable, lazy_load_segment_for_file, aux))
+			return NULL;
+
+		// record page_cnt
+		page = spt_find_page(&t->spt, addr);
+		page->page_cnt = page_cnt;
+
+		offset += page_read_bytes;
+		flen -= page_read_bytes;
+		length -= length < PGSIZE ? length : PGSIZE; // prevent unsigned underflow
+		addr += PGSIZE;
+		page_cnt++;
+	}
+
+	return start_addr;
 }

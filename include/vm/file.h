@@ -19,7 +19,7 @@ struct file_page {
 };
 struct lock file_lock;
 
-
+bool lazy_load_segment_for_file(struct page *page, void *aux);
 void vm_file_init (void);
 bool file_backed_initializer (struct page *page, enum vm_type type, void *kva);
 void *do_mmap(void *addr, size_t length, int writable,
