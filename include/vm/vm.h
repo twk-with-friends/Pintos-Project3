@@ -81,7 +81,6 @@ struct page {
 	 * Each function automatically detects the current union */
 		struct uninit_page uninit;
 union {
-		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
 #ifdef EFILESYS
