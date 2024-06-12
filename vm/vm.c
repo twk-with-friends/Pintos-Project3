@@ -356,8 +356,6 @@ void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
 
-	// ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
-	// ASSERT(ofs % PGSIZE == 0);
 
 
 	void *start_addr = addr; // return value or in case of fail - free from this addr
@@ -379,10 +377,7 @@ do_mmap (void *addr, size_t length, int writable,
 				// free allocated uninit page
 				page = spt_find_page(&t->spt, free_addr);
 
-				// destroy(page); // uninit destroy - free aux
-				// free(page->frame);
-				// free(page);
-				// remove_page(page);
+		
 				spt_remove_page(&t->spt, page);
 
 
@@ -421,4 +416,49 @@ do_mmap (void *addr, size_t length, int writable,
 	}
 
 	return start_addr;
+}
+/* Swap in the page by read contents from the file. */
+static bool
+file_backed_swap_in (struct page *page, void *kva) {
+	struct file_page *file_page = &page->file;
+
+	ASSERT(page->frame->kva == kva); // #ifdef DBG check
+
+	void *addr = page->va;
+	//struct thread *t = thread_current();
+
+	//aren't these already set in vm_do_claim_page?
+	//page->frame->kva = kva; 
+	//pml4_set_page(t->pml4, addr, kva, true); // writable true, as we are writing into the frame
+
+	struct file *file = file_page->file;
+	size_t length = file_page->length;
+	off_t offset = file_page->offset;
+
+	if(file_read_at(file, kva, length, offset) != length){
+		// TODO - Not properly written-back
+	}
+	return true;
+}
+static bool
+file_backed_swap_out (struct page *page) {
+	struct file_page *file_page UNUSED = &page->file;
+	void *addr = page->va;
+	struct thread *t = thread_current();
+
+	if(pml4_is_dirty(t->pml4, addr)){
+		struct file *file = file_page->file;
+		size_t length = file_page->length;
+		off_t offset = file_page->offset;
+		void *kva = page->frame->kva;
+		if(file_write_at(file, kva, length, offset) != length){
+			// TODO - Not properly written-back
+		}
+	}
+
+	// access to page now generates fault
+	pml4_clear_page(t->pml4, addr);
+	page->frame->page = NULL;
+	page->frame = NULL;
+	return true;
 }

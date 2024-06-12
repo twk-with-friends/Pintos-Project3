@@ -92,6 +92,7 @@ file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 	close(file_page->file);
 }
+
 bool
 lazy_load_segment_for_file(struct page *page, void *aux)
 {
@@ -123,4 +124,3 @@ lazy_load_segment_for_file(struct page *page, void *aux)
 
 	return true;
 }
-
