@@ -4,6 +4,7 @@
 #include "threads/palloc.h"
 #include "lib/kernel/hash.h"
 #include "filesys/off_t.h"
+#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 
 struct lazy_load_info {
 	struct file *file;
