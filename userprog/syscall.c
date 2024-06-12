@@ -373,12 +373,21 @@ tell(int fd)
 }
 
 void close(int fd)
-{	
-	struct file *file = process_get_file(fd);
-	if (file == NULL){
-		exit(-1);
-	}
-	
-	file_close(file);
-	process_close_file(fd);
+{
+    // 표준 입력(0) 또는 표준 출력(1) 파일 디스크립터를 닫으려고 할 경우 -1 반환
+    if (fd <= 1) {
+        return;
+    }
+
+    // 파일 디스크립터에 해당하는 파일 가져오기
+    struct file *file = process_get_file(fd);
+    if (file == NULL) {
+        return;
+    }
+
+    // 파일 디스크립터 테이블에서 파일 제거
+    process_close_file(fd);
+
+    // 파일 닫기
+    file_close(file);
 }

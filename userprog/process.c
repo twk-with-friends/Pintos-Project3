@@ -845,7 +845,7 @@ struct file *process_get_file(int fd)
 {
 	struct thread *t = thread_current();
 	struct file **fdt = t->file_descriptor_table;
-	if (fd < 2 || fd > FDT_COUNT_LIMIT)
+	if (fd < 0 || fd > FDT_COUNT_LIMIT)
 		return NULL;
 	
 	struct file *file = fdt[fd];
